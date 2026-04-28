@@ -10,7 +10,7 @@ on:
 
 env:
   BINARY_NAME: deepseek
-  VERSION: "1.0.0"
+  VERSION: ${{ github.ref_name }}
 
 jobs:
   build:
