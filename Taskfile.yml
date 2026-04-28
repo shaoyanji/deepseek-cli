@@ -1,0 +1,341 @@
+version: '3'
+
+vars:
+  BINARY_NAME: deepseek
+  VERSION: "1.0.0"
+  BUILD_DIR: build
+  LDFLAGS: "-s -w -X main.version={{.VERSION}}"
+
+tasks:
+  default:
+    desc: Show available tasks
+    cmds:
+      - task -l
+
+  build:
+    desc: Build for current platform
+    cmds:
+      - go build -o {{.BUILD_DIR}}/{{.BINARY_NAME}} -ldflags="{{.LDFLAGS}}" .
+    sources:
+      - "**/*.go"
+      - go.mod
+      - go.sum
+    generates:
+      - "{{.BUILD_DIR}}/{{.BINARY_NAME}}"
+
+  build:all:
+    desc: Build for all platforms
+    cmds:
+      - task: build:linux:386
+      - task: build:linux:amd64
+      - task: build:linux:arm
+      - task: build:linux:arm64
+      - task: build:windows:386
+      - task: build:windows:amd64
+      - task: build:windows:arm64
+      - task: build:darwin:amd64
+      - task: build:darwin:arm64
+      - task: build:freebsd:386
+      - task: build:freebsd:amd64
+      - task: build:freebsd:arm
+      - task: build:freebsd:arm64
+
+  # Linux builds
+  build:linux:386:
+    desc: Build for Linux 32-bit (x86)
+    cmds:
+      - mkdir -p {{.BUILD_DIR}}/linux-386
+      - GOOS=linux GOARCH=386 go build -o {{.BUILD_DIR}}/linux-386/{{.BINARY_NAME}} -ldflags="{{.LDFLAGS}}" .
+    sources:
+      - "**/*.go"
+      - go.mod
+      - go.sum
+    generates:
+      - "{{.BUILD_DIR}}/linux-386/{{.BINARY_NAME}}"
+
+  build:linux:amd64:
+    desc: Build for Linux 64-bit (x86_64)
+    cmds:
+      - mkdir -p {{.BUILD_DIR}}/linux-amd64
+      - GOOS=linux GOARCH=amd64 go build -o {{.BUILD_DIR}}/linux-amd64/{{.BINARY_NAME}} -ldflags="{{.LDFLAGS}}" .
+    sources:
+      - "**/*.go"
+      - go.mod
+      - go.sum
+    generates:
+      - "{{.BUILD_DIR}}/linux-amd64/{{.BINARY_NAME}}"
+
+  build:linux:arm:
+    desc: Build for Linux ARM (arm32)
+    cmds:
+      - mkdir -p {{.BUILD_DIR}}/linux-arm
+      - GOOS=linux GOARCH=arm go build -o {{.BUILD_DIR}}/linux-arm/{{.BINARY_NAME}} -ldflags="{{.LDFLAGS}}" .
+    sources:
+      - "**/*.go"
+      - go.mod
+      - go.sum
+    generates:
+      - "{{.BUILD_DIR}}/linux-arm/{{.BINARY_NAME}}"
+
+  build:linux:arm64:
+    desc: Build for Linux ARM64 (aarch64)
+    cmds:
+      - mkdir -p {{.BUILD_DIR}}/linux-arm64
+      - GOOS=linux GOARCH=arm64 go build -o {{.BUILD_DIR}}/linux-arm64/{{.BINARY_NAME}} -ldflags="{{.LDFLAGS}}" .
+    sources:
+      - "**/*.go"
+      - go.mod
+      - go.sum
+    generates:
+      - "{{.BUILD_DIR}}/linux-arm64/{{.BINARY_NAME}}"
+
+  # Windows builds
+  build:windows:386:
+    desc: Build for Windows 32-bit (x86)
+    cmds:
+      - mkdir -p {{.BUILD_DIR}}/windows-386
+      - GOOS=windows GOARCH=386 go build -o {{.BUILD_DIR}}/windows-386/{{.BINARY_NAME}}.exe -ldflags="{{.LDFLAGS}}" .
+    sources:
+      - "**/*.go"
+      - go.mod
+      - go.sum
+    generates:
+      - "{{.BUILD_DIR}}/windows-386/{{.BINARY_NAME}}.exe"
+
+  build:windows:amd64:
+    desc: Build for Windows 64-bit (x86_64)
+    cmds:
+      - mkdir -p {{.BUILD_DIR}}/windows-amd64
+      - GOOS=windows GOARCH=amd64 go build -o {{.BUILD_DIR}}/windows-amd64/{{.BINARY_NAME}}.exe -ldflags="{{.LDFLAGS}}" .
+    sources:
+      - "**/*.go"
+      - go.mod
+      - go.sum
+    generates:
+      - "{{.BUILD_DIR}}/windows-amd64/{{.BINARY_NAME}}.exe"
+
+  build:windows:arm64:
+    desc: Build for Windows ARM64
+    cmds:
+      - mkdir -p {{.BUILD_DIR}}/windows-arm64
+      - GOOS=windows GOARCH=arm64 go build -o {{.BUILD_DIR}}/windows-arm64/{{.BINARY_NAME}}.exe -ldflags="{{.LDFLAGS}}" .
+    sources:
+      - "**/*.go"
+      - go.mod
+      - go.sum
+    generates:
+      - "{{.BUILD_DIR}}/windows-arm64/{{.BINARY_NAME}}.exe"
+
+  # macOS builds
+  build:darwin:amd64:
+    desc: Build for macOS Intel (x86_64)
+    cmds:
+      - mkdir -p {{.BUILD_DIR}}/darwin-amd64
+      - GOOS=darwin GOARCH=amd64 go build -o {{.BUILD_DIR}}/darwin-amd64/{{.BINARY_NAME}} -ldflags="{{.LDFLAGS}}" .
+    sources:
+      - "**/*.go"
+      - go.mod
+      - go.sum
+    generates:
+      - "{{.BUILD_DIR}}/darwin-amd64/{{.BINARY_NAME}}"
+
+  build:darwin:arm64:
+    desc: Build for macOS Apple Silicon (M1/M2/M3)
+    cmds:
+      - mkdir -p {{.BUILD_DIR}}/darwin-arm64
+      - GOOS=darwin GOARCH=arm64 go build -o {{.BUILD_DIR}}/darwin-arm64/{{.BINARY_NAME}} -ldflags="{{.LDFLAGS}}" .
+    sources:
+      - "**/*.go"
+      - go.mod
+      - go.sum
+    generates:
+      - "{{.BUILD_DIR}}/darwin-arm64/{{.BINARY_NAME}}"
+
+  # FreeBSD builds
+  build:freebsd:386:
+    desc: Build for FreeBSD 32-bit (x86)
+    cmds:
+      - mkdir -p {{.BUILD_DIR}}/freebsd-386
+      - GOOS=freebsd GOARCH=386 go build -o {{.BUILD_DIR}}/freebsd-386/{{.BINARY_NAME}} -ldflags="{{.LDFLAGS}}" .
+    sources:
+      - "**/*.go"
+      - go.mod
+      - go.sum
+    generates:
+      - "{{.BUILD_DIR}}/freebsd-386/{{.BINARY_NAME}}"
+
+  build:freebsd:amd64:
+    desc: Build for FreeBSD 64-bit (x86_64)
+    cmds:
+      - mkdir -p {{.BUILD_DIR}}/freebsd-amd64
+      - GOOS=freebsd GOARCH=amd64 go build -o {{.BUILD_DIR}}/freebsd-amd64/{{.BINARY_NAME}} -ldflags="{{.LDFLAGS}}" .
+    sources:
+      - "**/*.go"
+      - go.mod
+      - go.sum
+    generates:
+      - "{{.BUILD_DIR}}/freebsd-amd64/{{.BINARY_NAME}}"
+
+  build:freebsd:arm:
+    desc: Build for FreeBSD ARM (arm32)
+    cmds:
+      - mkdir -p {{.BUILD_DIR}}/freebsd-arm
+      - GOOS=freebsd GOARCH=arm go build -o {{.BUILD_DIR}}/freebsd-arm/{{.BINARY_NAME}} -ldflags="{{.LDFLAGS}}" .
+    sources:
+      - "**/*.go"
+      - go.mod
+      - go.sum
+    generates:
+      - "{{.BUILD_DIR}}/freebsd-arm/{{.BINARY_NAME}}"
+
+  build:freebsd:arm64:
+    desc: Build for FreeBSD ARM64 (aarch64)
+    cmds:
+      - mkdir -p {{.BUILD_DIR}}/freebsd-arm64
+      - GOOS=freebsd GOARCH=arm64 go build -o {{.BUILD_DIR}}/freebsd-arm64/{{.BINARY_NAME}} -ldflags="{{.LDFLAGS}}" .
+    sources:
+      - "**/*.go"
+      - go.mod
+      - go.sum
+    generates:
+      - "{{.BUILD_DIR}}/freebsd-arm64/{{.BINARY_NAME}}"
+
+  # Release tasks
+  release:
+    desc: Create release packages for all platforms
+    cmds:
+      - task: release:linux:386
+      - task: release:linux:amd64
+      - task: release:linux:arm
+      - task: release:linux:arm64
+      - task: release:windows:386
+      - task: release:windows:amd64
+      - task: release:windows:arm64
+      - task: release:darwin:amd64
+      - task: release:darwin:arm64
+      - task: release:freebsd:386
+      - task: release:freebsd:amd64
+      - task: release:freebsd:arm
+      - task: release:freebsd:arm64
+
+  release:linux:386:
+    desc: Create release package for Linux 32-bit
+    deps:
+      - build:linux:386
+    cmds:
+      - cd {{.BUILD_DIR}}/linux-386 && tar -czf {{.BINARY_NAME}}-{{.VERSION}}-linux-386.tar.gz {{.BINARY_NAME}}
+      - mv {{.BUILD_DIR}}/linux-386/{{.BINARY_NAME}}-{{.VERSION}}-linux-386.tar.gz {{.BUILD_DIR}}/
+
+  release:linux:amd64:
+    desc: Create release package for Linux 64-bit
+    deps:
+      - build:linux:amd64
+    cmds:
+      - cd {{.BUILD_DIR}}/linux-amd64 && tar -czf {{.BINARY_NAME}}-{{.VERSION}}-linux-amd64.tar.gz {{.BINARY_NAME}}
+      - mv {{.BUILD_DIR}}/linux-amd64/{{.BINARY_NAME}}-{{.VERSION}}-linux-amd64.tar.gz {{.BUILD_DIR}}/
+
+  release:linux:arm:
+    desc: Create release package for Linux ARM
+    deps:
+      - build:linux:arm
+    cmds:
+      - cd {{.BUILD_DIR}}/linux-arm && tar -czf {{.BINARY_NAME}}-{{.VERSION}}-linux-arm.tar.gz {{.BINARY_NAME}}
+      - mv {{.BUILD_DIR}}/linux-arm/{{.BINARY_NAME}}-{{.VERSION}}-linux-arm.tar.gz {{.BUILD_DIR}}/
+
+  release:linux:arm64:
+    desc: Create release package for Linux ARM64
+    deps:
+      - build:linux:arm64
+    cmds:
+      - cd {{.BUILD_DIR}}/linux-arm64 && tar -czf {{.BINARY_NAME}}-{{.VERSION}}-linux-arm64.tar.gz {{.BINARY_NAME}}
+      - mv {{.BUILD_DIR}}/linux-arm64/{{.BINARY_NAME}}-{{.VERSION}}-linux-arm64.tar.gz {{.BUILD_DIR}}/
+
+  release:windows:386:
+    desc: Create release package for Windows 32-bit
+    deps:
+      - build:windows:386
+    cmds:
+      - cd {{.BUILD_DIR}}/windows-386 && zip {{.BINARY_NAME}}-{{.VERSION}}-windows-386.zip {{.BINARY_NAME}}.exe
+      - mv {{.BUILD_DIR}}/windows-386/{{.BINARY_NAME}}-{{.VERSION}}-windows-386.zip {{.BUILD_DIR}}/
+
+  release:windows:amd64:
+    desc: Create release package for Windows 64-bit
+    deps:
+      - build:windows:amd64
+    cmds:
+      - cd {{.BUILD_DIR}}/windows-amd64 && zip {{.BINARY_NAME}}-{{.VERSION}}-windows-amd64.zip {{.BINARY_NAME}}.exe
+      - mv {{.BUILD_DIR}}/windows-amd64/{{.BINARY_NAME}}-{{.VERSION}}-windows-amd64.zip {{.BUILD_DIR}}/
+
+  release:windows:arm64:
+    desc: Create release package for Windows ARM64
+    deps:
+      - build:windows:arm64
+    cmds:
+      - cd {{.BUILD_DIR}}/windows-arm64 && zip {{.BINARY_NAME}}-{{.VERSION}}-windows-arm64.zip {{.BINARY_NAME}}.exe
+      - mv {{.BUILD_DIR}}/windows-arm64/{{.BINARY_NAME}}-{{.VERSION}}-windows-arm64.zip {{.BUILD_DIR}}/
+
+  release:darwin:amd64:
+    desc: Create release package for macOS Intel
+    deps:
+      - build:darwin:amd64
+    cmds:
+      - cd {{.BUILD_DIR}}/darwin-amd64 && tar -czf {{.BINARY_NAME}}-{{.VERSION}}-darwin-amd64.tar.gz {{.BINARY_NAME}}
+      - mv {{.BUILD_DIR}}/darwin-amd64/{{.BINARY_NAME}}-{{.VERSION}}-darwin-amd64.tar.gz {{.BUILD_DIR}}/
+
+  release:darwin:arm64:
+    desc: Create release package for macOS Apple Silicon
+    deps:
+      - build:darwin:arm64
+    cmds:
+      - cd {{.BUILD_DIR}}/darwin-arm64 && tar -czf {{.BINARY_NAME}}-{{.VERSION}}-darwin-arm64.tar.gz {{.BINARY_NAME}}
+      - mv {{.BUILD_DIR}}/darwin-arm64/{{.BINARY_NAME}}-{{.VERSION}}-darwin-arm64.tar.gz {{.BUILD_DIR}}/
+
+  release:freebsd:386:
+    desc: Create release package for FreeBSD 32-bit
+    deps:
+      - build:freebsd:386
+    cmds:
+      - cd {{.BUILD_DIR}}/freebsd-386 && tar -czf {{.BINARY_NAME}}-{{.VERSION}}-freebsd-386.tar.gz {{.BINARY_NAME}}
+      - mv {{.BUILD_DIR}}/freebsd-386/{{.BINARY_NAME}}-{{.VERSION}}-freebsd-386.tar.gz {{.BUILD_DIR}}/
+
+  release:freebsd:amd64:
+    desc: Create release package for FreeBSD 64-bit
+    deps:
+      - build:freebsd:amd64
+    cmds:
+      - cd {{.BUILD_DIR}}/freebsd-amd64 && tar -czf {{.BINARY_NAME}}-{{.VERSION}}-freebsd-amd64.tar.gz {{.BINARY_NAME}}
+      - mv {{.BUILD_DIR}}/freebsd-amd64/{{.BINARY_NAME}}-{{.VERSION}}-freebsd-amd64.tar.gz {{.BUILD_DIR}}/
+
+  release:freebsd:arm:
+    desc: Create release package for FreeBSD ARM
+    deps:
+      - build:freebsd:arm
+    cmds:
+      - cd {{.BUILD_DIR}}/freebsd-arm && tar -czf {{.BINARY_NAME}}-{{.VERSION}}-freebsd-arm.tar.gz {{.BINARY_NAME}}
+      - mv {{.BUILD_DIR}}/freebsd-arm/{{.BINARY_NAME}}-{{.VERSION}}-freebsd-arm.tar.gz {{.BUILD_DIR}}/
+
+  release:freebsd:arm64:
+    desc: Create release package for FreeBSD ARM64
+    deps:
+      - build:freebsd:arm64
+    cmds:
+      - cd {{.BUILD_DIR}}/freebsd-arm64 && tar -czf {{.BINARY_NAME}}-{{.VERSION}}-freebsd-arm64.tar.gz {{.BINARY_NAME}}
+      - mv {{.BUILD_DIR}}/freebsd-arm64/{{.BINARY_NAME}}-{{.VERSION}}-freebsd-arm64.tar.gz {{.BUILD_DIR}}/
+
+  # Utility tasks
+  clean:
+    desc: Clean build directory
+    cmds:
+      - rm -rf {{.BUILD_DIR}}
+
+  checksums:
+    desc: Generate SHA256 checksums for release packages
+    deps:
+      - release
+    cmds:
+      - cd {{.BUILD_DIR}} && sha256sum *.tar.gz *.zip > SHA256SUMS.txt
+
+  list:
+    desc: List all built binaries
+    cmds:
+      - find {{.BUILD_DIR}} -type f -name "{{.BINARY_NAME}}*" -o -name "*.tar.gz" -o -name "*.zip" | sort
