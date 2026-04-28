@@ -7,7 +7,7 @@ import (
 )
 
 // formatChatResponse formats a chat completion response for display
-func formatChatResponse(data []byte) error {
+func formatChatResponse(data []byte, showCache bool) error {
 	var resp ChatResponse
 	if err := json.Unmarshal(data, &resp); err != nil {
 		// If parsing fails, just output raw JSON
@@ -58,10 +58,19 @@ func formatChatResponse(data []byte) error {
 
 	// Output usage statistics
 	if resp.Usage != nil {
-		fmt.Printf("\n[usage: prompt_tokens=%d, completion_tokens=%d, total_tokens=%d]\n",
-			resp.Usage.PromptTokens,
-			resp.Usage.CompletionTokens,
-			resp.Usage.TotalTokens)
+		if showCache {
+			fmt.Printf("\n[usage: prompt_tokens=%d, completion_tokens=%d, total_tokens=%d, cache_hit_tokens=%d, cache_miss_tokens=%d]\n",
+				resp.Usage.PromptTokens,
+				resp.Usage.CompletionTokens,
+				resp.Usage.TotalTokens,
+				resp.Usage.PromptCacheHitTokens,
+				resp.Usage.PromptCacheMissTokens)
+		} else {
+			fmt.Printf("\n[usage: prompt_tokens=%d, completion_tokens=%d, total_tokens=%d]\n",
+				resp.Usage.PromptTokens,
+				resp.Usage.CompletionTokens,
+				resp.Usage.TotalTokens)
+		}
 	}
 
 	return nil
@@ -98,7 +107,7 @@ func formatFIMResponse(data []byte) error {
 }
 
 // formatJSONModeResponse formats a JSON mode response
-func formatJSONModeResponse(data []byte) error {
+func formatJSONModeResponse(data []byte, showCache bool) error {
 	var resp ChatResponse
 	if err := json.Unmarshal(data, &resp); err != nil {
 		// If parsing fails, try to extract just the content
@@ -148,10 +157,19 @@ func formatJSONModeResponse(data []byte) error {
 
 	// Output usage statistics
 	if resp.Usage != nil {
-		fmt.Printf("\n[usage: prompt_tokens=%d, completion_tokens=%d, total_tokens=%d]\n",
-			resp.Usage.PromptTokens,
-			resp.Usage.CompletionTokens,
-			resp.Usage.TotalTokens)
+		if showCache {
+			fmt.Printf("\n[usage: prompt_tokens=%d, completion_tokens=%d, total_tokens=%d, cache_hit_tokens=%d, cache_miss_tokens=%d]\n",
+				resp.Usage.PromptTokens,
+				resp.Usage.CompletionTokens,
+				resp.Usage.TotalTokens,
+				resp.Usage.PromptCacheHitTokens,
+				resp.Usage.PromptCacheMissTokens)
+		} else {
+			fmt.Printf("\n[usage: prompt_tokens=%d, completion_tokens=%d, total_tokens=%d]\n",
+				resp.Usage.PromptTokens,
+				resp.Usage.CompletionTokens,
+				resp.Usage.TotalTokens)
+		}
 	}
 
 	return nil

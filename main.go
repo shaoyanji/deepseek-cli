@@ -12,10 +12,9 @@ import (
 var version string
 
 func main() {
-	// Load config file
+	// Load config file (optional - will use defaults if not found)
 	config, err := LoadConfig()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: failed to load config: %v\n", err)
 		config = &Config{}
 	}
 
@@ -30,7 +29,7 @@ func main() {
 	root := &cobra.Command{
 		Use:   "deepseek",
 		Short: "DeepSeek API CLI",
-		Long:  "Interact with DeepSeek API. Configure via DEEPSEEK_API_KEY, DEEPSEEK_API_BASE, or config file.",
+		Long:  "Interact with DeepSeek API. Configure via DEEPSEEK_API_KEY, DEEPSEEK_API_BASE, or optional config file.",
 		Version: getVersion(),
 	}
 
@@ -80,7 +79,7 @@ func main() {
 	configCmd := &cobra.Command{
 		Use:   "config",
 		Short: "Manage configuration",
-		Long:  "Create or view the configuration file location.",
+		Long:  "View the configuration file location and current settings. Config is optional - defaults will be used if file doesn't exist.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			configPath, err := GetConfigPath()
@@ -91,7 +90,13 @@ func main() {
 			
 			// Check if config exists
 			if _, err := os.Stat(configPath); os.IsNotExist(err) {
-				fmt.Println("Config file does not exist. Run 'deepseek config init' to create a sample config.")
+				fmt.Println("Config file does not exist (using defaults)")
+				fmt.Println("\nCurrent defaults:")
+				fmt.Printf("  Model: %s\n", config.Chat.Model)
+				fmt.Printf("  Temperature: %.1f\n", config.Chat.Temperature)
+				fmt.Printf("  Thinking: %s\n", config.Chat.Thinking)
+				fmt.Printf("  Reasoning Effort: %s\n", config.Chat.ReasoningEffort)
+				fmt.Println("\nRun 'deepseek config init' to create a config file for custom settings.")
 			} else {
 				fmt.Println("Config file exists.")
 			}
@@ -102,7 +107,7 @@ func main() {
 	configInitCmd := &cobra.Command{
 		Use:   "init",
 		Short: "Create sample configuration file",
-		Long:  "Create a sample configuration file in the XDG config directory.",
+		Long:  "Create a sample configuration file in the XDG config directory. This is optional - the CLI works with defaults without a config file.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			configPath, err := GetConfigPath()
@@ -194,10 +199,11 @@ func main() {
 			}
 			
 			// Format response based on JSON mode
+			showCache, _ := cmd.Flags().GetBool("cache")
 			if req.ResponseFormat != nil && req.ResponseFormat.Type == "json_object" {
-				return formatJSONModeResponse(out)
+				return formatJSONModeResponse(out, showCache)
 			}
-			return formatChatResponse(out)
+			return formatChatResponse(out, showCache)
 		},
 	}
 	
@@ -221,6 +227,7 @@ func main() {
 	
 	// Output format
 	chatCmd.Flags().Bool("json-mode", config.Chat.JSONMode, "Enable JSON mode (response_format: json_object)")
+	chatCmd.Flags().Bool("cache", false, "Show cache hit metrics in response")
 	chatCmd.Flags().StringSlice("stop", []string{}, "Stop sequences (up to 16 strings)")
 	
 	// Streaming
