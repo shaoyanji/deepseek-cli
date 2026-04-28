@@ -179,7 +179,8 @@ func CreateSampleConfig() error {
 	}
 
 	// Sample config
-	sampleConfig := `# DeepSeek CLI Configuration
+	sampleConfig := `# DeepSeek CLI Configuration (Optional)
+# This file is optional - the CLI will use defaults if it doesn't exist.
 # Place this file in your XDG config directory:
 # Linux: ~/.config/deepseek-cli/config.yaml
 # macOS: ~/Library/Application Support/deepseek-cli/config.yaml
