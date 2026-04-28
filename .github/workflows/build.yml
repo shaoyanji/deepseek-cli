@@ -116,22 +116,44 @@ jobs:
         run: |
           OUTPUT_NAME="${{ env.BINARY_NAME }}-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.ext }}"
           LDFLAGS="-s -w -X main.version=${{ env.VERSION }}"
-          go build -ldflags="$LDFLAGS" -o "$OUTPUT_NAME" .
+          
+          # Only set GOARM if it's defined
+          if [ -z "$GOARM" ]; then
+            unset GOARM
+            go build -ldflags="$LDFLAGS" -o "$OUTPUT_NAME" .
+          else
+            go build -ldflags="$LDFLAGS" -o "$OUTPUT_NAME" .
+          fi
+          
+          if [ ! -f "$OUTPUT_NAME" ]; then
+            echo "Build failed: binary not created"
+            exit 1
+          fi
           
           # Create output directory
           mkdir -p build
           mv "$OUTPUT_NAME" build/
+          ls -lh build/
 
       - name: Create archive
         shell: bash
         run: |
           cd build
           FILENAME="${{ env.BINARY_NAME }}-${{ env.VERSION }}-${{ matrix.os }}-${{ matrix.arch }}"
+          BINARY_FILE="${{ env.BINARY_NAME }}-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.ext }}"
+          
+          if [ ! -f "$BINARY_FILE" ]; then
+            echo "Binary file not found: $BINARY_FILE"
+            ls -la
+            exit 1
+          fi
           
           if [[ "${{ matrix.os }}" == "windows" ]]; then
-            zip "${FILENAME}.zip" "${{ env.BINARY_NAME }}-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.ext }}"
+            zip "${FILENAME}.zip" "$BINARY_FILE"
+            ls -lh "${FILENAME}.zip"
           else
-            tar -czf "${FILENAME}.tar.gz" "${{ env.BINARY_NAME }}-${{ matrix.os }}-${{ matrix.arch }}"
+            tar -czf "${FILENAME}.tar.gz" "$BINARY_FILE"
+            ls -lh "${FILENAME}.tar.gz"
           fi
 
       - name: Upload artifact
@@ -140,45 +162,7 @@ jobs:
           name: ${{ env.BINARY_NAME }}-${{ matrix.os }}-${{ matrix.arch }}
           path: build/*
           retention-days: 30
-
-  release:
-    name: Create Release
-    needs: build
-    runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/')
-    permissions:
-      contents: write
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-
-      - name: Create checksums
-        run: |
-          if [ ! -d "artifacts" ] || [ -z "$(ls -A artifacts)" ]; then
-            echo "No artifacts found, skipping checksum creation"
-            exit 0
-          fi
-          cd artifacts
-          find . -type f \( -name "*.tar.gz" -o -name "*.zip" \) -exec sha256sum {} \; > SHA256SUMS.txt
-          cat SHA256SUMS.txt
-
-      - name: Create Release
-        uses: softprops/action-gh-release@v1
-        with:
-          files: |
-            artifacts/**
-          draft: false
-          prerelease: false
-          generate_release_notes: true
-          fail_on_unmatched_files: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          if-no-files-found: error
 
   test:
     name: Test
@@ -207,3 +191,47 @@ jobs:
           ./deepseek fim --help
           ./deepseek models --help
           ./deepseek balance --help
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: List artifacts
+        run: |
+          echo "Artifacts directory structure:"
+          find artifacts -type f -exec ls -lh {} \;
+
+      - name: Create checksums
+        run: |
+          if [ ! -d "artifacts" ] || [ -z "$(find artifacts -type f)" ]; then
+            echo "No artifacts found, skipping checksum creation"
+            exit 0
+          fi
+          cd artifacts
+          find . -type f \( -name "*.tar.gz" -o -name "*.zip" \) -exec sha256sum {} \; > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            artifacts/**/*
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          fail_on_unmatched_files: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
