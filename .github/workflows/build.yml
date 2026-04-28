@@ -160,6 +160,10 @@ jobs:
 
       - name: Create checksums
         run: |
+          if [ ! -d "artifacts" ] || [ -z "$(ls -A artifacts)" ]; then
+            echo "No artifacts found, skipping checksum creation"
+            exit 0
+          fi
           cd artifacts
           find . -type f \( -name "*.tar.gz" -o -name "*.zip" \) -exec sha256sum {} \; > SHA256SUMS.txt
           cat SHA256SUMS.txt
@@ -174,6 +178,7 @@ jobs:
           draft: false
           prerelease: false
           generate_release_notes: true
+          fail_on_unmatched_files: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
