@@ -138,7 +138,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.BINARY_NAME }}-${{ matrix.os }}-${{ matrix.arch }}
-          path: build/*.{tar.gz,zip}
+          path: build/*
           retention-days: 30
 
   release:
@@ -172,9 +172,7 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            artifacts/**/*.tar.gz
-            artifacts/**/*.zip
-            artifacts/SHA256SUMS.txt
+            artifacts/**
           draft: false
           prerelease: false
           generate_release_notes: true
