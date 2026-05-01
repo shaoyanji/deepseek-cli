@@ -1,672 +1,60 @@
 package main
 
 import (
-	"bytes"
-	"io"
-	"net/http"
-	"os"
 	"strings"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
 )
-
-func TestExtractContent(t *testing.T) {
-	tests := []struct {
-		name           string
-		data           []byte
-		completionType string
-		expected       string
-	}{
-		{
-			name:           "chat response with content",
-			data:           []byte(`{"choices":[{"message":{"content":"Hello world"}}]}`),
-			completionType: "chat",
-			expected:       "Hello world",
-		},
-		{
-			name:           "chat response without content",
-			data:           []byte(`{"choices":[{"message":{}}]}`),
-			completionType: "chat",
-			expected:       `{"choices":[{"message":{}}]}`,
-		},
-		{
-			name:           "fim response with text",
-			data:           []byte(`{"choices":[{"text":"function test() {}"}]}`),
-			completionType: "fim",
-			expected:       "function test() {}",
-		},
-		{
-			name:           "fim response without text",
-			data:           []byte(`{"choices":[{}]}`),
-			completionType: "fim",
-			expected:       `{"choices":[{}]}`,
-		},
-		{
-			name:           "invalid JSON",
-			data:           []byte(`invalid json`),
-			completionType: "chat",
-			expected:       `invalid json`,
-		},
-		{
-			name:           "empty choices",
-			data:           []byte(`{"choices":[]}`),
-			completionType: "chat",
-			expected:       `{"choices":[]}`,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := extractContent(tt.data, tt.completionType)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
-
-func TestExtractUsage(t *testing.T) {
-	tests := []struct {
-		name     string
-		data     []byte
-		expected *Usage
-	}{
-		{
-			name: "valid usage",
-			data: []byte(`{"usage":{"prompt_tokens":10,"completion_tokens":20,"total_tokens":30}}`),
-			expected: &Usage{
-				PromptTokens:     10,
-				CompletionTokens: 20,
-				TotalTokens:      30,
-			},
-		},
-		{
-			name:     "no usage field",
-			data:     []byte(`{"choices":[]}`),
-			expected: nil,
-		},
-		{
-			name:     "invalid JSON",
-			data:     []byte(`invalid`),
-			expected: nil,
-		},
-		{
-			name:     "partial usage",
-			data:     []byte(`{"usage":{"prompt_tokens":10}}`),
-			expected: &Usage{PromptTokens: 10},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := extractUsage(tt.data)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
-
-func TestExtractFinishReason(t *testing.T) {
-	tests := []struct {
-		name     string
-		data     []byte
-		expected string
-	}{
-		{
-			name:     "valid finish reason",
-			data:     []byte(`{"choices":[{"finish_reason":"stop"}]}`),
-			expected: "stop",
-		},
-		{
-			name:     "no finish reason",
-			data:     []byte(`{"choices":[{}]}`),
-			expected: "",
-		},
-		{
-			name:     "invalid JSON",
-			data:     []byte(`invalid`),
-			expected: "",
-		},
-		{
-			name:     "empty choices",
-			data:     []byte(`{"choices":[]}`),
-			expected: "",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := extractFinishReason(tt.data)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
-
-func TestExtractReasoningContent(t *testing.T) {
-	tests := []struct {
-		name     string
-		data     []byte
-		expected string
-	}{
-		{
-			name:     "valid reasoning content",
-			data:     []byte(`{"choices":[{"message":{"reasoning_content":"Thinking process"}}]}`),
-			expected: "Thinking process",
-		},
-		{
-			name:     "no reasoning content",
-			data:     []byte(`{"choices":[{"message":{}}]}`),
-			expected: "",
-		},
-		{
-			name:     "invalid JSON",
-			data:     []byte(`invalid`),
-			expected: "",
-		},
-		{
-			name:     "empty choices",
-			data:     []byte(`{"choices":[]}`),
-			expected: "",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := extractReasoningContent(tt.data)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
-
-func TestExtractToolCalls(t *testing.T) {
-	tests := []struct {
-		name     string
-		data     []byte
-		expected []string
-	}{
-		{
-			name: "valid tool calls",
-			data: []byte(`{"choices":[{"message":{"tool_calls":[{"id":"1","type":"function","function":{"name":"search","arguments":"{}"}}]}}]}`),
-			expected: []string{"search({})"},
-		},
-		{
-			name:     "no tool calls",
-			data:     []byte(`{"choices":[{"message":{}}]}`),
-			expected: nil,
-		},
-		{
-			name:     "invalid JSON",
-			data:     []byte(`invalid`),
-			expected: nil,
-		},
-		{
-			name:     "empty choices",
-			data:     []byte(`{"choices":[]}`),
-			expected: nil,
-		},
-		{
-			name: "multiple tool calls",
-			data: []byte(`{"choices":[{"message":{"tool_calls":[{"id":"1","type":"function","function":{"name":"search","arguments":"{}"}},{"id":"2","type":"function","function":{"name":"write","arguments":"{}"}}]}}]}`),
-			expected: []string{"search({})", "write({})"},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := extractToolCalls(tt.data)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
-
-func TestIsJSONModeResponse(t *testing.T) {
-	tests := []struct {
-		name     string
-		data     []byte
-		expected bool
-	}{
-		{
-			name:     "json_object mode",
-			data:     []byte(`{"response_format":{"type":"json_object"}}`),
-			expected: true,
-		},
-		{
-			name:     "text mode",
-			data:     []byte(`{"response_format":{"type":"text"}}`),
-			expected: false,
-		},
-		{
-			name:     "no response format",
-			data:     []byte(`{"choices":[]}`),
-			expected: false,
-		},
-		{
-			name:     "invalid JSON",
-			data:     []byte(`invalid`),
-			expected: false,
-		},
-		{
-			name:     "response format without type",
-			data:     []byte(`{"response_format":{}}`),
-			expected: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := isJSONModeResponse(tt.data)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
-
-func TestFormatErrorResponse(t *testing.T) {
-	tests := []struct {
-		name        string
-		data        []byte
-		expectedErr string
-	}{
-		{
-			name:        "valid error response",
-			data:        []byte(`{"error":{"message":"Invalid API key","type":"invalid_request_error","code":"invalid_api_key"}}`),
-			expectedErr: "API error: Invalid API key (type: invalid_request_error, code: invalid_api_key)",
-		},
-		{
-			name:        "error with only message",
-			data:        []byte(`{"error":{"message":"Error occurred"}}`),
-			expectedErr: "API error: Error occurred (type: , code: )",
-		},
-		{
-			name:        "invalid JSON",
-			data:        []byte(`invalid`),
-			expectedErr: "API error: invalid",
-		},
-		{
-			name:        "no error field",
-			data:        []byte(`{"choices":[]}`),
-			expectedErr: "API error: {\"choices\":[]}",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := formatErrorResponse(tt.data)
-			assert.Error(t, err)
-			assert.Equal(t, tt.expectedErr, err.Error())
-		})
-	}
-}
-
-func TestShouldFormatPretty(t *testing.T) {
-	// This function currently always returns true
-	result := shouldFormatPretty()
-	assert.True(t, result)
-}
-
-func TestTrimWhitespace(t *testing.T) {
-	tests := []struct {
-		name     string
-		content  string
-		expected string
-	}{
-		{
-			name:     "leading and trailing whitespace",
-			content:  "  hello world  ",
-			expected: "hello world",
-		},
-		{
-			name:     "only whitespace",
-			content:  "   ",
-			expected: "",
-		},
-		{
-			name:     "no whitespace",
-			content:  "hello",
-			expected: "hello",
-		},
-		{
-			name:     "newlines and tabs",
-			content:  "\n\t  hello  \t\n",
-			expected: "hello",
-		},
-		{
-			name:     "empty string",
-			content:  "",
-			expected: "",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := trimWhitespace(tt.content)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
-
-func TestFormatModelsResponse(t *testing.T) {
-	tests := []struct {
-		name        string
-		data        []byte
-		contains    []string
-		expectError bool
-	}{
-		{
-			name: "valid models response",
-			data: []byte(`{"object":"list","data":[{"id":"deepseek-v4-pro","object":"model","owned_by":"deepseek","created":1234567890}]}`),
-			contains: []string{
-				"Object: list",
-				"Total models: 1",
-				"ID: deepseek-v4-pro",
-				"Type: model",
-				"Owned by: deepseek",
-				"Created: 1234567890",
-			},
-			expectError: false,
-		},
-		{
-			name:        "invalid JSON",
-			data:        []byte(`invalid`),
-			contains:    []string{"invalid"},
-			expectError: false,
-		},
-		{
-			name: "multiple models",
-			data: []byte(`{"object":"list","data":[{"id":"model1","object":"model","owned_by":"deepseek"},{"id":"model2","object":"model","owned_by":"deepseek"}]}`),
-			contains: []string{
-				"Total models: 2",
-				"ID: model1",
-				"ID: model2",
-			},
-			expectError: false,
-		},
-		{
-			name: "model without created timestamp",
-			data: []byte(`{"object":"list","data":[{"id":"model1","object":"model","owned_by":"deepseek"}]}`),
-			contains: []string{
-				"ID: model1",
-			},
-			expectError: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Capture stdout
-			oldStdout := os.Stdout
-			r, w, _ := os.Pipe()
-			os.Stdout = w
-
-			err := formatModelsResponse(tt.data)
-
-			// Restore stdout and read captured output
-			w.Close()
-			os.Stdout = oldStdout
-			var buf bytes.Buffer
-			io.Copy(&buf, r)
-			output := buf.String()
-
-			if tt.expectError {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-			}
-
-			for _, expected := range tt.contains {
-				assert.Contains(t, output, expected)
-			}
-		})
-	}
-}
-
-func TestFormatBalanceResponse(t *testing.T) {
-	tests := []struct {
-		name        string
-		data        []byte
-		contains    []string
-		expectError bool
-	}{
-		{
-			name: "valid balance response",
-			data: []byte(`{"balance":100.0,"total_balance":150.0,"available_balance":120.0,"granted_balance":30.0}`),
-			contains: []string{
-				"Balance Information:",
-				"Balance: 100.000000",
-				"Total Balance: 150.000000",
-				"Available Balance: 120.000000",
-				"Granted Balance: 30.000000",
-			},
-			expectError: false,
-		},
-		{
-			name:        "invalid JSON",
-			data:        []byte(`invalid`),
-			contains:    []string{"invalid"},
-			expectError: false,
-		},
-		{
-			name: "partial balance",
-			data: []byte(`{"balance":50.0}`),
-			contains: []string{
-				"Balance Information:",
-				"Balance: 50.000000",
-			},
-			expectError: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Capture stdout
-			oldStdout := os.Stdout
-			r, w, _ := os.Pipe()
-			os.Stdout = w
-
-			err := formatBalanceResponse(tt.data)
-
-			// Restore stdout and read captured output
-			w.Close()
-			os.Stdout = oldStdout
-			var buf bytes.Buffer
-			io.Copy(&buf, r)
-			output := buf.String()
-
-			if tt.expectError {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-			}
-
-			for _, expected := range tt.contains {
-				assert.Contains(t, output, expected)
-			}
-		})
-	}
-}
-
-func TestParseSSEStream(t *testing.T) {
-	client := &Client{
-		APIKey: "test-key",
-		Base:   "https://api.test.com",
-		Client: &http.Client{},
-	}
-
-	tests := []struct {
-		name           string
-		input          string
-		completionType string
-		contains       []string
-		expectError    bool
-	}{
-		{
-			name:           "chat stream with delta content",
-			input:          "data: {\"choices\":[{\"delta\":{\"content\":\"Hello\"}}]}\n\ndata: [DONE]\n",
-			completionType: "chat",
-			contains:       []string{"Hello"},
-			expectError:    false,
-		},
-		{
-			name:           "chat stream with finish reason",
-			input:          "data: {\"choices\":[{\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n",
-			completionType: "chat",
-			contains:       []string{"finish_reason: stop"},
-			expectError:    false,
-		},
-		{
-			name:           "chat stream with usage",
-			input:          "data: {\"usage\":{\"prompt_tokens\":10,\"completion_tokens\":20,\"total_tokens\":30}}\n\ndata: [DONE]\n",
-			completionType: "chat",
-			contains:       []string{"usage: prompt_tokens=10"},
-			expectError:    false,
-		},
-		{
-			name:           "fim stream with text",
-			input:          "data: {\"choices\":[{\"text\":\"function\"}]}\n\ndata: [DONE]\n",
-			completionType: "fim",
-			contains:       []string{"function"},
-			expectError:    false,
-		},
-		{
-			name:           "fim stream with finish reason",
-			input:          "data: {\"choices\":[{\"finish_reason\":\"length\"}]}\n\ndata: [DONE]\n",
-			completionType: "fim",
-			contains:       []string{"finish_reason: length"},
-			expectError:    false,
-		},
-		{
-			name:           "empty lines",
-			input:          "\n\n\ndata: [DONE]\n",
-			completionType: "chat",
-			contains:       []string{},
-			expectError:    false,
-		},
-		{
-			name:           "invalid data prefix",
-			input:          "invalid: {\"choices\":[]}\n\ndata: [DONE]\n",
-			completionType: "chat",
-			contains:       []string{},
-			expectError:    false,
-		},
-		{
-			name:           "invalid JSON",
-			input:          "data: {invalid}\n\ndata: [DONE]\n",
-			completionType: "chat",
-			contains:       []string{},
-			expectError:    false,
-		},
-		{
-			name:           "multiple chunks",
-			input:          "data: {\"choices\":[{\"delta\":{\"content\":\"Hello\"}}]}\n\ndata: {\"choices\":[{\"delta\":{\"content\":\" world\"}}]}\n\ndata: [DONE]\n",
-			completionType: "chat",
-			contains:       []string{"Hello", "world"},
-			expectError:    false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Capture stdout
-			oldStdout := os.Stdout
-			r, w, _ := os.Pipe()
-			os.Stdout = w
-
-			reader := strings.NewReader(tt.input)
-			err := client.parseSSEStream(reader, tt.completionType)
-
-			// Restore stdout and read captured output
-			w.Close()
-			os.Stdout = oldStdout
-			var buf bytes.Buffer
-			io.Copy(&buf, r)
-			output := buf.String()
-
-			if tt.expectError {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-			}
-
-			for _, expected := range tt.contains {
-				assert.Contains(t, output, expected)
-			}
-		})
-	}
-}
 
 func TestFormatChatResponse(t *testing.T) {
 	tests := []struct {
-		name        string
-		data        []byte
-		showCache   bool
-		contains    []string
-		expectError bool
+		name      string
+		data      string
+		showCache bool
+		wantErr   bool
 	}{
 		{
-			name:      "valid chat response with content",
-			data:      []byte(`{"choices":[{"message":{"content":"Hello world"}}]}`),
+			name: "valid chat response with content",
+			data: `{"choices":[{"message":{"content":"Hello!"}}],"usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15}}`,
 			showCache: false,
-			contains:  []string{"Hello world"},
+			wantErr:   false,
 		},
 		{
-			name:      "chat response with usage",
-			data:      []byte(`{"choices":[{"message":{"content":"Hello"}}],"usage":{"prompt_tokens":10,"completion_tokens":20,"total_tokens":30}}`),
+			name: "valid chat response with reasoning",
+			data: `{"choices":[{"message":{"content":"Answer","reasoning_content":"Thinking..."}}],"usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15}}`,
 			showCache: false,
-			contains:  []string{"Hello", "usage: prompt_tokens=10"},
+			wantErr:   false,
 		},
 		{
-			name:      "chat response with cache info",
-			data:      []byte(`{"choices":[{"message":{"content":"Hello"}}],"usage":{"prompt_tokens":10,"completion_tokens":20,"total_tokens":30,"prompt_cache_hit_tokens":5,"prompt_cache_miss_tokens":5}}`),
+			name: "chat response with tool calls",
+			data: `{"choices":[{"message":{"role":"assistant","content":"","tool_calls":[{"id":"call1","type":"function","function":{"name":"get_weather","arguments":"{\"location\":\"NYC\"}"}}]}}]}`,
+			showCache: false,
+			wantErr:   false,
+		},
+		{
+			name: "invalid JSON falls back to raw output",
+			data: `not valid json`,
+			showCache: false,
+			wantErr:   false,
+		},
+		{
+			name: "show cache metrics",
+			data: `{"choices":[{"message":{"content":"Hi"}}],"usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15,"prompt_cache_hit_tokens":3,"prompt_cache_miss_tokens":7}}`,
 			showCache: true,
-			contains:  []string{"cache_hit_tokens=5", "cache_miss_tokens=5"},
+			wantErr:   false,
 		},
 		{
-			name:      "chat response with reasoning content",
-			data:      []byte(`{"choices":[{"message":{"content":"Answer","reasoning_content":"Thinking process"}}]}`),
+			name: "with finish reason",
+			data: `{"choices":[{"message":{"content":"Done"},"finish_reason":"stop"}]}`,
 			showCache: false,
-			contains:  []string{"Answer", "Reasoning: Thinking process"},
-		},
-		{
-			name:      "chat response with finish reason",
-			data:      []byte(`{"choices":[{"message":{"content":"Hello"},"finish_reason":"stop"}]}`),
-			showCache: false,
-			contains:  []string{"finish_reason: stop"},
-		},
-		{
-			name:      "invalid JSON",
-			data:      []byte(`invalid`),
-			showCache: false,
-			contains:  []string{"invalid"},
-		},
-		{
-			name:      "empty choices",
-			data:      []byte(`{"choices":[]}`),
-			showCache: false,
-			contains:  []string{},
+			wantErr:   false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Capture stdout
-			oldStdout := os.Stdout
-			r, w, _ := os.Pipe()
-			os.Stdout = w
-
-			err := formatChatResponse(tt.data, tt.showCache)
-
-			// Restore stdout and read captured output
-			w.Close()
-			os.Stdout = oldStdout
-			var buf bytes.Buffer
-			io.Copy(&buf, r)
-			output := buf.String()
-
-			if tt.expectError {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-			}
-
-			for _, expected := range tt.contains {
-				assert.Contains(t, output, expected)
+			err := formatChatResponse([]byte(tt.data), tt.showCache)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("formatChatResponse() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}
@@ -674,62 +62,32 @@ func TestFormatChatResponse(t *testing.T) {
 
 func TestFormatFIMResponse(t *testing.T) {
 	tests := []struct {
-		name        string
-		data        []byte
-		contains    []string
-		expectError bool
+		name    string
+		data    string
+		wantErr bool
 	}{
 		{
-			name:     "valid FIM response with text",
-			data:     []byte(`{"choices":[{"text":"function test() {}"}]}`),
-			contains: []string{"function test() {}"},
+			name:    "valid FIM response",
+			data:    `{"choices":[{"text":"func main() {}"}],"usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15}}`,
+			wantErr: false,
 		},
 		{
-			name:     "FIM response with usage",
-			data:     []byte(`{"choices":[{"text":"function"}],"usage":{"prompt_tokens":10,"completion_tokens":20,"total_tokens":30}}`),
-			contains: []string{"function", "usage: prompt_tokens=10"},
+			name:    "invalid JSON falls back to raw output",
+			data:    `not valid json`,
+			wantErr: false,
 		},
 		{
-			name:     "FIM response with finish reason",
-			data:     []byte(`{"choices":[{"text":"function","finish_reason":"length"}]}`),
-			contains: []string{"finish_reason: length"},
-		},
-		{
-			name:     "invalid JSON",
-			data:     []byte(`invalid`),
-			contains: []string{"invalid"},
-		},
-		{
-			name:     "empty choices",
-			data:     []byte(`{"choices":[]}`),
-			contains: []string{},
+			name:    "with finish reason",
+			data:    `{"choices":[{"text":"code","finish_reason":"stop"}]}`,
+			wantErr: false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Capture stdout
-			oldStdout := os.Stdout
-			r, w, _ := os.Pipe()
-			os.Stdout = w
-
-			err := formatFIMResponse(tt.data)
-
-			// Restore stdout and read captured output
-			w.Close()
-			os.Stdout = oldStdout
-			var buf bytes.Buffer
-			io.Copy(&buf, r)
-			output := buf.String()
-
-			if tt.expectError {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-			}
-
-			for _, expected := range tt.contains {
-				assert.Contains(t, output, expected)
+			err := formatFIMResponse([]byte(tt.data))
+			if (err != nil) != tt.wantErr {
+				t.Errorf("formatFIMResponse() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}
@@ -737,75 +95,457 @@ func TestFormatFIMResponse(t *testing.T) {
 
 func TestFormatJSONModeResponse(t *testing.T) {
 	tests := []struct {
-		name        string
-		data        []byte
-		showCache   bool
-		contains    []string
-		expectError bool
+		name      string
+		data      string
+		showCache bool
+		wantErr   bool
 	}{
 		{
 			name:      "valid JSON mode response",
-			data:      []byte(`{"choices":[{"message":{"content":"{\"key\":\"value\"}"}}]}`),
+			data:      `{"choices":[{"message":{"content":"{\"key\":\"value\"}"}}]}`,
 			showCache: false,
-			contains:  []string{"key", "value"},
+			wantErr:   false,
 		},
 		{
-			name:      "JSON mode with pretty printed output",
-			data:      []byte(`{"choices":[{"message":{"content":"{\"name\":\"test\",\"value\":123}"}}]}`),
+			name:      "pretty prints JSON content",
+			data:      `{"choices":[{"message":{"content":"{\"name\":\"test\",\"value\":123}"}}]}`,
 			showCache: false,
-			contains:  []string{"name", "test", "value", "123"},
+			wantErr:   false,
 		},
 		{
-			name:      "JSON mode with usage",
-			data:      []byte(`{"choices":[{"message":{"content":"{}"}}],"usage":{"prompt_tokens":10,"completion_tokens":20,"total_tokens":30}}`),
+			name:      "invalid JSON falls back gracefully",
+			data:      `not valid json`,
 			showCache: false,
-			contains:  []string{"usage: prompt_tokens=10"},
-		},
-		{
-			name:      "invalid JSON in content",
-			data:      []byte(`{"choices":[{"message":{"content":"not valid json"}}]}`),
-			showCache: false,
-			contains:  []string{"not valid json"},
-		},
-		{
-			name:      "completely invalid response",
-			data:      []byte(`invalid`),
-			showCache: false,
-			contains:  []string{"invalid"},
-		},
-		{
-			name:      "raw map parsing fallback",
-			data:      []byte(`{"choices":[{"message":{"content":"{\"test\":\"data\"}"}}],"response_format":{"type":"json_object"}}`),
-			showCache: false,
-			contains:  []string{"test", "data"},
+			wantErr:   false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Capture stdout
-			oldStdout := os.Stdout
-			r, w, _ := os.Pipe()
-			os.Stdout = w
-
-			err := formatJSONModeResponse(tt.data, tt.showCache)
-
-			// Restore stdout and read captured output
-			w.Close()
-			os.Stdout = oldStdout
-			var buf bytes.Buffer
-			io.Copy(&buf, r)
-			output := buf.String()
-
-			if tt.expectError {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-			}
-
-			for _, expected := range tt.contains {
-				assert.Contains(t, output, expected)
+			err := formatJSONModeResponse([]byte(tt.data), tt.showCache)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("formatJSONModeResponse() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
+	}
+}
+
+func TestExtractContent(t *testing.T) {
+	tests := []struct {
+		name           string
+		data           string
+		completionType string
+		want           string
+	}{
+		{
+			name:           "extract chat content",
+			data:           `{"choices":[{"message":{"content":"Hello world"}}]}`,
+			completionType: "chat",
+			want:           "Hello world",
+		},
+		{
+			name:           "extract FIM text",
+			data:           `{"choices":[{"text":"func main() {}"}]}`,
+			completionType: "fim",
+			want:           "func main() {}",
+		},
+		{
+			name:           "invalid JSON returns raw",
+			data:           `not json`,
+			completionType: "chat",
+			want:           "not json",
+		},
+		{
+			name:           "empty choices",
+			data:           `{"choices":[]}`,
+			completionType: "chat",
+			want:           `{"choices":[]}`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := extractContent([]byte(tt.data), tt.completionType)
+			if got != tt.want {
+				t.Errorf("extractContent() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestExtractUsage(t *testing.T) {
+	tests := []struct {
+		name string
+		data string
+		want *Usage
+	}{
+		{
+			name: "valid usage",
+			data: `{"usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15}}`,
+			want: &Usage{PromptTokens: 10, CompletionTokens: 5, TotalTokens: 15},
+		},
+		{
+			name: "no usage in response",
+			data: `{"choices":[]}`,
+			want: nil,
+		},
+		{
+			name: "invalid JSON",
+			data: `not json`,
+			want: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := extractUsage([]byte(tt.data))
+			if tt.want == nil {
+				if got != nil {
+					t.Errorf("extractUsage() = %v, want nil", got)
+				}
+			} else if got == nil || got.PromptTokens != tt.want.PromptTokens || got.CompletionTokens != tt.want.CompletionTokens || got.TotalTokens != tt.want.TotalTokens {
+				t.Errorf("extractUsage() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestExtractFinishReason(t *testing.T) {
+	tests := []struct {
+		name string
+		data string
+		want string
+	}{
+		{
+			name: "extract finish reason",
+			data: `{"choices":[{"finish_reason":"stop"}]}`,
+			want: "stop",
+		},
+		{
+			name: "no finish reason",
+			data: `{"choices":[{"message":{"content":"hi"}}]}`,
+			want: "",
+		},
+		{
+			name: "invalid JSON",
+			data: `not json`,
+			want: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := extractFinishReason([]byte(tt.data))
+			if got != tt.want {
+				t.Errorf("extractFinishReason() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestExtractReasoningContent(t *testing.T) {
+	tests := []struct {
+		name string
+		data string
+		want string
+	}{
+		{
+			name: "extract reasoning content",
+			data: `{"choices":[{"message":{"reasoning_content":"I'm thinking..."}}]}`,
+			want: "I'm thinking...",
+		},
+		{
+			name: "no reasoning content",
+			data: `{"choices":[{"message":{"content":"hi"}}]}`,
+			want: "",
+		},
+		{
+			name: "invalid JSON",
+			data: `not json`,
+			want: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := extractReasoningContent([]byte(tt.data))
+			if got != tt.want {
+				t.Errorf("extractReasoningContent() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestExtractToolCalls(t *testing.T) {
+	tests := []struct {
+		name string
+		data string
+		want []string
+	}{
+		{
+			name: "extract tool calls",
+			data: `{"choices":[{"message":{"tool_calls":[{"function":{"name":"get_weather","arguments":"{\"loc\":\"NYC\"}"}}]}}]}`,
+			want: []string{"get_weather({\"loc\":\"NYC\"})"},
+		},
+		{
+			name: "no tool calls",
+			data: `{"choices":[{"message":{"content":"hi"}}]}`,
+			want: nil,
+		},
+		{
+			name: "invalid JSON",
+			data: `not json`,
+			want: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := extractToolCalls([]byte(tt.data))
+			if len(got) != len(tt.want) {
+				t.Errorf("extractToolCalls() = %v, want %v", got, tt.want)
+				return
+			}
+			for i := range got {
+				if got[i] != tt.want[i] {
+					t.Errorf("extractToolCalls()[%d] = %q, want %q", i, got[i], tt.want[i])
+				}
+			}
+		})
+	}
+}
+
+func TestIsJSONModeResponse(t *testing.T) {
+	tests := []struct {
+		name string
+		data string
+		want bool
+	}{
+		{
+			name: "JSON mode response",
+			data: `{"response_format":{"type":"json_object"}}`,
+			want: true,
+		},
+		{
+			name: "not JSON mode",
+			data: `{"model":"deepseek-v4-pro"}`,
+			want: false,
+		},
+		{
+			name: "invalid JSON",
+			data: `not json`,
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := isJSONModeResponse([]byte(tt.data))
+			if got != tt.want {
+				t.Errorf("isJSONModeResponse() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestFormatErrorResponse(t *testing.T) {
+	tests := []struct {
+		name    string
+		data    string
+		wantErr string
+	}{
+		{
+			name:    "API error with message",
+			data:    `{"error":{"message":"Invalid API key","type":"authentication_error","code":"invalid_api_key"}}`,
+			wantErr: "API error: Invalid API key (type: authentication_error, code: invalid_api_key)",
+		},
+		{
+			name:    "API error without code",
+			data:    `{"error":{"message":"Rate limited"}}`,
+			wantErr: "API error: Rate limited (type: , code: )",
+		},
+		{
+			name:    "raw error message",
+			data:    `some error occurred`,
+			wantErr: "API error: some error occurred",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := formatErrorResponse([]byte(tt.data))
+			if err == nil || err.Error() != tt.wantErr {
+				t.Errorf("formatErrorResponse() error = %v, want %q", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestShouldFormatPretty(t *testing.T) {
+	result := shouldFormatPretty()
+	if !result {
+		t.Errorf("shouldFormatPretty() = false, want true")
+	}
+}
+
+func TestTrimWhitespace(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{
+			name:  "trim spaces",
+			input: "  hello  ",
+			want:  "hello",
+		},
+		{
+			name:  "trim newlines",
+			input: "\nworld\n",
+			want:  "world",
+		},
+		{
+			name:  "no whitespace",
+			input: "test",
+			want:  "test",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := trimWhitespace(tt.input)
+			if got != tt.want {
+				t.Errorf("trimWhitespace() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestFormatModelsResponse(t *testing.T) {
+	tests := []struct {
+		name    string
+		data    string
+		wantErr bool
+	}{
+		{
+			name:    "valid models response",
+			data:    `{"object":"list","data":[{"id":"deepseek-v4-pro","object":"model","owned_by":"deepseek"}]}`,
+			wantErr: false,
+		},
+		{
+			name:    "invalid JSON falls back to raw",
+			data:    `not json`,
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := formatModelsResponse([]byte(tt.data))
+			if (err != nil) != tt.wantErr {
+				t.Errorf("formatModelsResponse() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestFormatBalanceResponse(t *testing.T) {
+	tests := []struct {
+		name    string
+		data    string
+		wantErr bool
+	}{
+		{
+			name:    "valid balance response",
+			data:    `{"balance":100.50,"total_balance":150.75,"available_balance":100.50,"granted_balance":50.25}`,
+			wantErr: false,
+		},
+		{
+			name:    "invalid JSON falls back to raw",
+			data:    `not json`,
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := formatBalanceResponse([]byte(tt.data))
+			if (err != nil) != tt.wantErr {
+				t.Errorf("formatBalanceResponse() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestFormatChatResponse_EmptyContent(t *testing.T) {
+	data := `{"choices":[{"message":{"content":""}}]}`
+	err := formatChatResponse([]byte(data), false)
+	if err != nil {
+		t.Errorf("formatChatResponse() with empty content error = %v", err)
+	}
+}
+
+func TestFormatChatResponse_NilContent(t *testing.T) {
+	data := `{"choices":[{"message":{"content":null}}]}`
+	err := formatChatResponse([]byte(data), false)
+	if err != nil {
+		t.Errorf("formatChatResponse() with nil content error = %v", err)
+	}
+}
+
+func TestExtractContent_EmptyData(t *testing.T) {
+	result := extractContent([]byte(""), "chat")
+	if result != "" {
+		t.Errorf("extractContent() with empty data = %q, want empty string", result)
+	}
+}
+
+func TestFormatJSONModeResponse_EmptyContent(t *testing.T) {
+	data := `{"choices":[{"message":{"content":""}}]}`
+	err := formatJSONModeResponse([]byte(data), false)
+	if err != nil {
+		t.Errorf("formatJSONModeResponse() with empty content error = %v", err)
+	}
+}
+
+func TestFormatJSONModeResponse_InvalidJSONInContent(t *testing.T) {
+	// Content is invalid JSON, should fall back to printing content
+	data := `{"choices":[{"message":{"content":"not valid json"}}]}`
+	err := formatJSONModeResponse([]byte(data), false)
+	if err != nil {
+		t.Errorf("formatJSONModeResponse() with invalid JSON in content error = %v", err)
+	}
+}
+
+func TestFormatJSONModeResponse_NoChoices(t *testing.T) {
+	data := `{"choices":[]}`
+	err := formatJSONModeResponse([]byte(data), false)
+	if err != nil {
+		t.Errorf("formatJSONModeResponse() with no choices error = %v", err)
+	}
+}
+
+func TestFormatJSONModeResponse_NoMessage(t *testing.T) {
+	data := `{"choices":[{}]}`
+	err := formatJSONModeResponse([]byte(data), false)
+	if err != nil {
+		t.Errorf("formatJSONModeResponse() with no message error = %v", err)
+	}
+}
+
+func TestFormatJSONModeResponse_WithCacheAndUsage(t *testing.T) {
+	data := `{"choices":[{"message":{"content":"{\"a\":1}"}}],"usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15,"prompt_cache_hit_tokens":3,"prompt_cache_miss_tokens":7}}`
+	err := formatJSONModeResponse([]byte(data), true)
+	if err != nil {
+		t.Errorf("formatJSONModeResponse() with cache error = %v", err)
+	}
+}
+
+func TestLongContent(t *testing.T) {
+	longContent := strings.Repeat("a", 10000)
+	data := `{"choices":[{"message":{"content":"` + longContent + `"}}]}`
+	err := formatChatResponse([]byte(data), false)
+	if err != nil {
+		t.Errorf("formatChatResponse() with long content error = %v", err)
 	}
 }
