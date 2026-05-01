@@ -614,11 +614,12 @@ func hasStdinData() bool {
 	return (stat.Mode() & os.ModeCharDevice) == 0
 }
 
-func launchTUI(cmd *cobra.Command, config *Config) {
-	if err := executeTUI(cmd, config); err != nil {
+func launchTUI(cmd *cobra.Command, config *Config) error {
+	err := executeTUI(cmd, config)
+	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
 	}
+	return err
 }
 
 func executeTUI(cmd *cobra.Command, config *Config) error {
@@ -647,11 +648,8 @@ func executeTUI(cmd *cobra.Command, config *Config) error {
 	return nil
 }
 
-func handleSingleTurn(cmd *cobra.Command, prompt string, config *Config) {
-	if err := executeSingleTurn(cmd, prompt, config); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
-	}
+func handleSingleTurn(cmd *cobra.Command, prompt string, config *Config) error {
+	return executeSingleTurn(cmd, prompt, config)
 }
 
 func executeSingleTurn(cmd *cobra.Command, prompt string, config *Config) error {
@@ -694,11 +692,8 @@ func executeSingleTurn(cmd *cobra.Command, prompt string, config *Config) error 
 	return formatChatResponse(out, false)
 }
 
-func handleHistoryMode(cmd *cobra.Command, historyPath string, config *Config) {
-	if err := executeHistoryMode(cmd, historyPath, config); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
-	}
+func handleHistoryMode(cmd *cobra.Command, historyPath string, config *Config) error {
+	return executeHistoryMode(cmd, historyPath, config)
 }
 
 func executeHistoryMode(cmd *cobra.Command, historyPath string, config *Config) error {
@@ -748,11 +743,8 @@ func executeHistoryMode(cmd *cobra.Command, historyPath string, config *Config) 
 	return formatChatResponse(out, false)
 }
 
-func handleStdinMode(cmd *cobra.Command, config *Config) {
-	if err := executeStdinMode(cmd, config); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
-	}
+func handleStdinMode(cmd *cobra.Command, config *Config) error {
+	return executeStdinMode(cmd, config)
 }
 
 func executeStdinMode(cmd *cobra.Command, config *Config) error {
