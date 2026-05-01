@@ -3,15 +3,25 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/charmbracelet/bubbletea"
+	"deepseek-cli/internal/tui"
 )
 
 var version string
 
 func main() {
+	if err := run(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+}
+
+func run() error {
 	// Load config file (optional - will use defaults if not found)
 	config, err := LoadConfig()
 	if err != nil {
@@ -31,7 +41,33 @@ func main() {
 		Short: "DeepSeek API CLI",
 		Long:  "Interact with DeepSeek API. Configure via DEEPSEEK_API_KEY, DEEPSEEK_API_BASE, or optional config file.",
 		Version: getVersion(),
+		Run: func(cmd *cobra.Command, args []string) {
+			// If no subcommand is provided, check if we should launch TUI
+			prompt, _ := cmd.Flags().GetString("prompt")
+			history, _ := cmd.Flags().GetString("history")
+
+			if prompt != "" {
+				// Single-turn mode with prompt
+				handleSingleTurn(cmd, prompt, config)
+			} else if history != "" {
+				// Multi-turn mode with history file
+				handleHistoryMode(cmd, history, config)
+			} else {
+				// Check if stdin has data
+				if hasStdinData() {
+					handleStdinMode(cmd, config)
+				} else {
+					// Launch TUI by default
+					launchTUI(cmd, config)
+				}
+			}
+		},
 	}
+
+	// Add root flags for TUI mode
+	root.Flags().StringP("prompt", "p", "", "Single-turn prompt (non-interactive mode)")
+	root.Flags().String("history", "", "History file for multi-turn session")
+	root.Flags().Bool("tui", true, "Launch TUI interface (default when no subcommand or flags)")
 
 	// Models command
 	modelsCmd := &cobra.Command{
@@ -87,7 +123,7 @@ func main() {
 				return err
 			}
 			fmt.Printf("Config file location: %s\n", configPath)
-			
+
 			// Check if config exists
 			if _, err := os.Stat(configPath); os.IsNotExist(err) {
 				fmt.Println("Config file does not exist (using defaults)")
@@ -103,7 +139,7 @@ func main() {
 			return nil
 		},
 	}
-	
+
 	configInitCmd := &cobra.Command{
 		Use:   "init",
 		Short: "Create sample configuration file",
@@ -114,18 +150,18 @@ func main() {
 			if err != nil {
 				return err
 			}
-			
+
 			// Check if config already exists
 			if _, err := os.Stat(configPath); err == nil {
 				fmt.Printf("Config file already exists at: %s\n", configPath)
 				fmt.Println("Edit it directly or remove it first to recreate.")
 				return nil
 			}
-			
+
 			if err := CreateSampleConfig(); err != nil {
 				return err
 			}
-			
+
 			fmt.Printf("Sample config created at: %s\n", configPath)
 			fmt.Println("Edit the file to set your preferences.")
 			return nil
@@ -149,7 +185,7 @@ func main() {
 			} else {
 				base, apiKey = loadConfig()
 			}
-			
+
 			if apiKey == "" {
 				return fmt.Errorf("DEEPSEEK_API_KEY not set")
 			}
@@ -197,7 +233,7 @@ func main() {
 			if err != nil {
 				return err
 			}
-			
+
 			// Format response based on JSON mode
 			showCache, _ := cmd.Flags().GetBool("cache")
 			if req.ResponseFormat != nil && req.ResponseFormat.Type == "json_object" {
@@ -206,49 +242,49 @@ func main() {
 			return formatChatResponse(out, showCache)
 		},
 	}
-	
+
 	// Input flags
 	chatCmd.Flags().String("json", "", "Chat completion request JSON (messages, model, etc.) - bypasses individual flags")
 	chatCmd.Flags().String("model", config.Chat.Model, "Model to use (deepseek-v4-flash, deepseek-v4-pro)")
 	chatCmd.Flags().String("system", config.Chat.System, "System message content")
 	chatCmd.Flags().String("user", "", "User message content")
 	chatCmd.Flags().String("assistant", "", "Assistant message content (for conversation history)")
-	
+
 	// Thinking and reasoning flags
 	chatCmd.Flags().String("thinking", config.Chat.Thinking, "Thinking mode: enabled or disabled")
 	chatCmd.Flags().String("reasoning-effort", config.Chat.ReasoningEffort, "Reasoning effort: high or max")
-	
+
 	// Sampling parameters
 	chatCmd.Flags().Float64("temperature", config.Chat.Temperature, "Sampling temperature (0.0 to 2.0)")
 	chatCmd.Flags().Float64("top-p", config.Chat.TopP, "Nucleus sampling threshold (0.0 to 1.0)")
 	chatCmd.Flags().Int("max-tokens", config.Chat.MaxTokens, "Maximum tokens to generate (0 = no limit)")
 	chatCmd.Flags().Float64("frequency-penalty", config.Chat.FrequencyPenalty, "Frequency penalty (-2.0 to 2.0)")
 	chatCmd.Flags().Float64("presence-penalty", config.Chat.PresencePenalty, "Presence penalty (-2.0 to 2.0)")
-	
+
 	// Output format
 	chatCmd.Flags().Bool("json-mode", config.Chat.JSONMode, "Enable JSON mode (response_format: json_object)")
 	chatCmd.Flags().Bool("cache", false, "Show cache hit metrics in response")
 	chatCmd.Flags().StringSlice("stop", []string{}, "Stop sequences (up to 16 strings)")
-	
+
 	// Streaming
 	chatCmd.Flags().Bool("stream", config.Chat.Stream, "Enable streaming responses")
 	chatCmd.Flags().Bool("include-usage", config.Chat.IncludeUsage, "Include usage info in streaming responses")
-	
+
 	// Tools
 	chatCmd.Flags().String("tools", "", "Tools JSON array (e.g., '[{\"type\":\"function\",\"function\":{\"name\":\"weather\",\"parameters\":{}}}]')")
 	chatCmd.Flags().String("tool-choice", "auto", "Tool choice: none, auto, required, or JSON for function")
-	
+
 	// Logprobs
 	chatCmd.Flags().Bool("logprobs", false, "Return log probabilities")
 	chatCmd.Flags().Int("top-logprobs", 0, "Number of top log probabilities to return (0-20)")
-	
+
 	// Beta features
 	chatCmd.Flags().Bool("beta", config.Chat.Beta, "Use beta endpoint (https://api.deepseek.com/beta)")
 	chatCmd.Flags().Bool("prefix-completion", false, "Enable prefix completion (beta feature)")
-	
+
 	// Other
 	chatCmd.Flags().String("base-url", "", "Override base URL for this request")
-	
+
 	root.AddCommand(chatCmd)
 
 	// FIM completions command
@@ -266,7 +302,7 @@ func main() {
 			} else {
 				base, apiKey = loadConfig()
 			}
-			
+
 			if apiKey == "" {
 				return fmt.Errorf("DEEPSEEK_API_KEY not set")
 			}
@@ -335,10 +371,7 @@ func main() {
 	fimCmd.Flags().Bool("beta", config.FIM.Beta, "Use beta endpoint (default true for FIM)")
 	root.AddCommand(fimCmd)
 
-	if err := root.Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
+	return root.Execute()
 }
 
 // buildChatRequest constructs a ChatRequest from CLI flags
@@ -572,4 +605,167 @@ func getVersion() string {
 		return version
 	}
 	return "1.0.0"
+}
+
+// TUI and mode handler functions
+
+func hasStdinData() bool {
+	stat, _ := os.Stdin.Stat()
+	return (stat.Mode() & os.ModeCharDevice) == 0
+}
+
+func launchTUI(cmd *cobra.Command, config *Config) {
+	if err := executeTUI(cmd, config); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+func executeTUI(cmd *cobra.Command, config *Config) error {
+	// Load API key
+	_, apiKey := loadConfig()
+	if apiKey == "" {
+		return fmt.Errorf("DEEPSEEK_API_KEY not set")
+	}
+
+	// Initialize TUI model
+	model := tui.InitialModel()
+	model.Model = config.Chat.Model
+	model.SessionPath = os.TempDir() + "/deepseek_session.json"
+
+	// Load previous session if exists
+	if _, err := os.Stat(model.SessionPath); err == nil {
+		model.LoadSession()
+	}
+
+	// Start Bubble Tea program
+	p := tea.NewProgram(model)
+	if _, err := p.Run(); err != nil {
+		return fmt.Errorf("starting TUI: %w", err)
+	}
+
+	return nil
+}
+
+func handleSingleTurn(cmd *cobra.Command, prompt string, config *Config) {
+	if err := executeSingleTurn(cmd, prompt, config); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+func executeSingleTurn(cmd *cobra.Command, prompt string, config *Config) error {
+	// Load config
+	base, apiKey := loadConfig()
+	if apiKey == "" {
+		return fmt.Errorf("DEEPSEEK_API_KEY not set")
+	}
+
+	// Check for base-url override
+	if baseURL, _ := cmd.Flags().GetString("base-url"); baseURL != "" {
+		base = baseURL
+	}
+
+	// Build request
+	temperature := config.Chat.Temperature
+	topP := config.Chat.TopP
+	maxTokens := config.Chat.MaxTokens
+
+	req := &ChatRequest{
+		Model:       config.Chat.Model,
+		Messages:    []Message{{Role: "user", Content: prompt}},
+		Temperature: &temperature,
+		TopP:        &topP,
+		MaxTokens:   &maxTokens,
+		Stream:      false,
+	}
+
+	// Validate
+	if err := ValidateChatRequest(req); err != nil {
+		return err
+	}
+
+	client := NewClient(base, apiKey)
+	out, err := client.do("POST", "/chat/completions", req)
+	if err != nil {
+		return err
+	}
+
+	return formatChatResponse(out, false)
+}
+
+func handleHistoryMode(cmd *cobra.Command, historyPath string, config *Config) {
+	if err := executeHistoryMode(cmd, historyPath, config); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+func executeHistoryMode(cmd *cobra.Command, historyPath string, config *Config) error {
+	// Load history file
+	data, err := os.ReadFile(historyPath)
+	if err != nil {
+		return fmt.Errorf("reading history file: %w", err)
+	}
+
+	// Parse history
+	var messages []Message
+	if err := json.Unmarshal(data, &messages); err != nil {
+		return fmt.Errorf("parsing history file: %w", err)
+	}
+
+	// Load config
+	base, apiKey := loadConfig()
+	if apiKey == "" {
+		return fmt.Errorf("DEEPSEEK_API_KEY not set")
+	}
+
+	// Build request with history
+	temperature := config.Chat.Temperature
+	topP := config.Chat.TopP
+	maxTokens := config.Chat.MaxTokens
+
+	req := &ChatRequest{
+		Model:       config.Chat.Model,
+		Messages:    messages,
+		Temperature: &temperature,
+		TopP:        &topP,
+		MaxTokens:   &maxTokens,
+		Stream:      false,
+	}
+
+	// Validate
+	if err := ValidateChatRequest(req); err != nil {
+		return err
+	}
+
+	client := NewClient(base, apiKey)
+	out, err := client.do("POST", "/chat/completions", req)
+	if err != nil {
+		return err
+	}
+
+	return formatChatResponse(out, false)
+}
+
+func handleStdinMode(cmd *cobra.Command, config *Config) {
+	if err := executeStdinMode(cmd, config); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+func executeStdinMode(cmd *cobra.Command, config *Config) error {
+	// Read from stdin
+	data, err := io.ReadAll(os.Stdin)
+	if err != nil {
+		return fmt.Errorf("reading stdin: %w", err)
+	}
+
+	prompt := strings.TrimSpace(string(data))
+	if prompt == "" {
+		return fmt.Errorf("no input provided via stdin")
+	}
+
+	return executeSingleTurn(cmd, prompt, config)
 }

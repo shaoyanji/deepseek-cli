@@ -322,11 +322,67 @@ tasks:
       - cd {{.BUILD_DIR}}/freebsd-arm64 && tar -czf {{.BINARY_NAME}}-{{.VERSION}}-freebsd-arm64.tar.gz {{.BINARY_NAME}}
       - mv {{.BUILD_DIR}}/freebsd-arm64/{{.BINARY_NAME}}-{{.VERSION}}-freebsd-arm64.tar.gz {{.BUILD_DIR}}/
 
+  # Testing and quality tasks
+  test:
+    desc: Run all tests with coverage
+    cmds:
+      - go test -coverprofile=coverage.out ./...
+      - go tool cover -func=coverage.out | tail -1
+      - |
+        COVERAGE=$(go tool cover -func=coverage.out | tail -1 | awk '{print $3}' | sed 's/%//')
+        if [ "${COVERAGE%.*}" -lt 100 ]; then
+          echo "ERROR: Test coverage is ${COVERAGE}%, required 100%"
+          exit 1
+        fi
+        echo "Coverage: ${COVERAGE}% - PASS"
+
+  test:verbose:
+    desc: Run tests with verbose output
+    cmds:
+      - go test -v -coverprofile=coverage.out ./...
+
+  test:package:
+    desc: Run tests for a specific package (usage - task test:package PKG=./internal/agent)
+    cmds:
+      - go test -v -coverprofile=coverage.out {{.PKG | default "./..."}}
+
+  lint:
+    desc: Run golangci-lint linter
+    cmds:
+      - golangci-lint run ./...
+
+  fmt:
+    desc: Format code with go fmt
+    cmds:
+      - go fmt ./...
+
+  vet:
+    desc: Run go vet for correctness
+    cmds:
+      - go vet ./...
+
+  ci:
+    desc: Run CI checks (test + lint + coverage)
+    cmds:
+      - task: fmt
+      - task: vet
+      - task: lint
+      - task: test
+
+  coverage:html:
+    desc: Generate HTML coverage report
+    deps:
+      - test
+    cmds:
+      - go tool cover -html=coverage.out -o coverage.html
+      - echo "Coverage report generated: coverage.html"
+
   # Utility tasks
   clean:
     desc: Clean build directory
     cmds:
       - rm -rf {{.BUILD_DIR}}
+      - rm -f coverage.out coverage.html
 
   checksums:
     desc: Generate SHA256 checksums for release packages
