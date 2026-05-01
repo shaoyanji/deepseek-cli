@@ -549,3 +549,46 @@ func TestLongContent(t *testing.T) {
 		t.Errorf("formatChatResponse() with long content error = %v", err)
 	}
 }
+
+func TestFormatJSONModeResponse_ValidJSONContent(t *testing.T) {
+	// Content is valid JSON that can be pretty-printed
+	data := `{"choices":[{"message":{"content":"{\"name\":\"test\",\"value\":123}"}}]}`
+	err := formatJSONModeResponse([]byte(data), false)
+	if err != nil {
+		t.Errorf("formatJSONModeResponse() with valid JSON content error = %v", err)
+	}
+}
+
+func TestFormatJSONModeResponse_InvalidJSONContent(t *testing.T) {
+	// Content is NOT valid JSON - should print as-is
+	data := `{"choices":[{"message":{"content":"not valid json"}}]}`
+	err := formatJSONModeResponse([]byte(data), false)
+	if err != nil {
+		t.Errorf("formatJSONModeResponse() with invalid JSON content error = %v", err)
+	}
+}
+
+func TestFormatJSONModeResponse_WithUsage(t *testing.T) {
+	data := `{"choices":[{"message":{"content":"{\"a\":1}"}}],"usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15}}`
+	err := formatJSONModeResponse([]byte(data), false)
+	if err != nil {
+		t.Errorf("formatJSONModeResponse() with usage error = %v", err)
+	}
+}
+
+func TestFormatJSONModeResponse_WithCacheUsage(t *testing.T) {
+	data := `{"choices":[{"message":{"content":"{\"a\":1}"}}],"usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15,"prompt_cache_hit_tokens":3,"prompt_cache_miss_tokens":7}}`
+	err := formatJSONModeResponse([]byte(data), true)
+	if err != nil {
+		t.Errorf("formatJSONModeResponse() with cache usage error = %v", err)
+	}
+}
+
+func TestFormatJSONModeResponse_NilMessage(t *testing.T) {
+	// Test when json.Unmarshal(data, &resp) succeeds but message content handling
+	data := `{"choices":[{"message":{"content":null}}]}`
+	err := formatJSONModeResponse([]byte(data), false)
+	if err != nil {
+		t.Errorf("formatJSONModeResponse() with null content error = %v", err)
+	}
+}

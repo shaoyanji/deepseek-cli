@@ -11,6 +11,13 @@ import (
 	"time"
 )
 
+// APIClientIface defines the interface for API clients (for testability)
+type APIClientIface interface {
+	do(method, path string, body interface{}) ([]byte, error)
+	streamChatCompletion(req *ChatRequest) error
+	streamFIMCompletion(req *FIMRequest) error
+}
+
 type Client struct {
 	Base   string
 	APIKey string

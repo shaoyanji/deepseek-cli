@@ -2,7 +2,7 @@ version: '3'
 
 vars:
   BINARY_NAME: deepseek
-  VERSION: "1.0.0"
+  VERSION: "1.0.3"
   BUILD_DIR: build
   LDFLAGS: "-s -w -X main.version={{.VERSION}}"
 
