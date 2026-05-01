@@ -76,16 +76,7 @@ func run() error {
 		Long:  "List all available DeepSeek models with their details.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			base, apiKey := loadConfig()
-			if apiKey == "" {
-				return fmt.Errorf("DEEPSEEK_API_KEY not set")
-			}
-			client := NewClient(base, apiKey)
-			out, err := client.do("GET", "/models", nil)
-			if err != nil {
-				return err
-			}
-			return formatModelsResponse(out)
+			return executeModelsCommand(cmd, nil)
 		},
 	}
 	root.AddCommand(modelsCmd)
@@ -97,16 +88,7 @@ func run() error {
 		Long:  "Get current balance and account information for your DeepSeek API account.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			base, apiKey := loadConfig()
-			if apiKey == "" {
-				return fmt.Errorf("DEEPSEEK_API_KEY not set")
-			}
-			client := NewClient(base, apiKey)
-			out, err := client.do("GET", "/user/balance", nil)
-			if err != nil {
-				return err
-			}
-			return formatBalanceResponse(out)
+			return executeBalanceCommand(cmd, nil)
 		},
 	}
 	root.AddCommand(balanceCmd)
@@ -177,69 +159,7 @@ func run() error {
 		Long:  "Create chat completions using DeepSeek API. Supports thinking mode, tools, JSON output, and streaming. Use --json for raw JSON input or individual flags for parameters.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// Load config (beta or regular based on --beta flag)
-			var base, apiKey string
-			useBeta, _ := cmd.Flags().GetBool("beta")
-			if useBeta {
-				base, apiKey = loadBetaConfig()
-			} else {
-				base, apiKey = loadConfig()
-			}
-
-			if apiKey == "" {
-				return fmt.Errorf("DEEPSEEK_API_KEY not set")
-			}
-
-			// Check for base-url override
-			if baseURL, _ := cmd.Flags().GetString("base-url"); baseURL != "" {
-				base = baseURL
-			}
-
-			// Check if --json is provided for raw JSON mode
-			jsonStr, _ := cmd.Flags().GetString("json")
-			if jsonStr != "" {
-				var payload interface{}
-				if err := json.Unmarshal([]byte(jsonStr), &payload); err != nil {
-					return fmt.Errorf("invalid JSON: %w", err)
-				}
-				client := NewClient(base, apiKey)
-				out, err := client.do("POST", "/chat/completions", payload)
-				if err != nil {
-					return err
-				}
-				fmt.Println(string(out))
-				return nil
-			}
-
-			// Build request from individual flags
-			req, err := buildChatRequest(cmd)
-			if err != nil {
-				return err
-			}
-
-			// Validate request
-			if err := ValidateChatRequest(req); err != nil {
-				return err
-			}
-
-			client := NewClient(base, apiKey)
-
-			// Handle streaming vs non-streaming
-			if req.Stream {
-				return client.streamChatCompletion(req)
-			}
-
-			out, err := client.do("POST", "/chat/completions", req)
-			if err != nil {
-				return err
-			}
-
-			// Format response based on JSON mode
-			showCache, _ := cmd.Flags().GetBool("cache")
-			if req.ResponseFormat != nil && req.ResponseFormat.Type == "json_object" {
-				return formatJSONModeResponse(out, showCache)
-			}
-			return formatChatResponse(out, showCache)
+			return executeChatCommand(cmd, nil)
 		},
 	}
 
@@ -294,63 +214,7 @@ func run() error {
 		Long:  "Create FIM completions for code completion in editors. Uses beta endpoint by default. Use --json for raw JSON input or individual flags for parameters.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// Load config (beta or regular based on --beta flag)
-			var base, apiKey string
-			useBeta, _ := cmd.Flags().GetBool("beta")
-			if useBeta {
-				base, apiKey = loadBetaConfig()
-			} else {
-				base, apiKey = loadConfig()
-			}
-
-			if apiKey == "" {
-				return fmt.Errorf("DEEPSEEK_API_KEY not set")
-			}
-
-			// Check for base-url override
-			if baseURL, _ := cmd.Flags().GetString("base-url"); baseURL != "" {
-				base = baseURL
-			}
-
-			// Check if --json is provided
-			jsonStr, _ := cmd.Flags().GetString("json")
-			if jsonStr != "" {
-				var payload interface{}
-				if err := json.Unmarshal([]byte(jsonStr), &payload); err != nil {
-					return fmt.Errorf("invalid JSON: %w", err)
-				}
-				client := NewClient(base, apiKey)
-				out, err := client.do("POST", "/completions", payload)
-				if err != nil {
-					return err
-				}
-				fmt.Println(string(out))
-				return nil
-			}
-
-			// Build FIM request from individual flags
-			req, err := buildFIMRequest(cmd)
-			if err != nil {
-				return err
-			}
-
-			// Validate request
-			if err := ValidateFIMRequest(req); err != nil {
-				return err
-			}
-
-			client := NewClient(base, apiKey)
-
-			// Handle streaming vs non-streaming
-			if req.Stream {
-				return client.streamFIMCompletion(req)
-			}
-
-			out, err := client.do("POST", "/completions", req)
-			if err != nil {
-				return err
-			}
-			return formatFIMResponse(out)
+			return executeFIMCommand(cmd, nil)
 		},
 	}
 	fimCmd.Flags().String("json", "", "FIM completion request JSON (prompt, suffix, model, etc.) - bypasses individual flags")
@@ -574,6 +438,170 @@ func buildFIMRequest(cmd *cobra.Command) (*FIMRequest, error) {
 	return req, nil
 }
 
+// executeChatCommand executes the chat command with an optional client for testability
+func executeChatCommand(cmd *cobra.Command, client APIClientIface) error {
+	// If no client provided, load config and check API key
+	if client == nil {
+		var base, apiKey string
+		useBeta, _ := cmd.Flags().GetBool("beta")
+		if useBeta {
+			base, apiKey = loadBetaConfig()
+		} else {
+			base, apiKey = loadConfig()
+		}
+
+		if apiKey == "" {
+			return fmt.Errorf("DEEPSEEK_API_KEY not set")
+		}
+
+		// Check for base-url override
+		if baseURL, _ := cmd.Flags().GetString("base-url"); baseURL != "" {
+			base = baseURL
+		}
+
+		client = NewClient(base, apiKey)
+	}
+
+	// Check if --json is provided for raw JSON mode
+	jsonStr, _ := cmd.Flags().GetString("json")
+	if jsonStr != "" {
+		var payload interface{}
+		if err := json.Unmarshal([]byte(jsonStr), &payload); err != nil {
+			return fmt.Errorf("invalid JSON: %w", err)
+		}
+		out, err := client.do("POST", "/chat/completions", payload)
+		if err != nil {
+			return err
+		}
+		fmt.Println(string(out))
+		return nil
+	}
+
+	// Build request from individual flags
+	req, err := buildChatRequest(cmd)
+	if err != nil {
+		return err
+	}
+
+	// Validate request
+	if err := ValidateChatRequest(req); err != nil {
+		return err
+	}
+
+	// Handle streaming vs non-streaming
+	if req.Stream {
+		return client.streamChatCompletion(req)
+	}
+
+	out, err := client.do("POST", "/chat/completions", req)
+	if err != nil {
+		return err
+	}
+
+	// Format response based on JSON mode
+	showCache, _ := cmd.Flags().GetBool("cache")
+	if req.ResponseFormat != nil && req.ResponseFormat.Type == "json_object" {
+		return formatJSONModeResponse(out, showCache)
+	}
+	return formatChatResponse(out, showCache)
+}
+
+// executeFIMCommand executes the FIM command with an optional client for testability
+func executeFIMCommand(cmd *cobra.Command, client APIClientIface) error {
+	// If no client provided, load config and check API key
+	if client == nil {
+		var base, apiKey string
+		useBeta, _ := cmd.Flags().GetBool("beta")
+		if useBeta {
+			base, apiKey = loadBetaConfig()
+		} else {
+			base, apiKey = loadConfig()
+		}
+
+		if apiKey == "" {
+			return fmt.Errorf("DEEPSEEK_API_KEY not set")
+		}
+
+		// Check for base-url override
+		if baseURL, _ := cmd.Flags().GetString("base-url"); baseURL != "" {
+			base = baseURL
+		}
+
+		client = NewClient(base, apiKey)
+	}
+
+	// Check if --json is provided
+	jsonStr, _ := cmd.Flags().GetString("json")
+	if jsonStr != "" {
+		var payload interface{}
+		if err := json.Unmarshal([]byte(jsonStr), &payload); err != nil {
+			return fmt.Errorf("invalid JSON: %w", err)
+		}
+		out, err := client.do("POST", "/completions", payload)
+		if err != nil {
+			return err
+		}
+		fmt.Println(string(out))
+		return nil
+	}
+
+	// Build FIM request from individual flags
+	req, err := buildFIMRequest(cmd)
+	if err != nil {
+		return err
+	}
+
+	// Validate request
+	if err := ValidateFIMRequest(req); err != nil {
+		return err
+	}
+
+	// Handle streaming vs non-streaming
+	if req.Stream {
+		return client.streamFIMCompletion(req)
+	}
+
+	out, err := client.do("POST", "/completions", req)
+	if err != nil {
+		return err
+	}
+	return formatFIMResponse(out)
+}
+
+// executeModelsCommand executes the models command with an optional client for testability
+func executeModelsCommand(cmd *cobra.Command, client APIClientIface) error {
+	// If no client provided, load config and check API key
+	if client == nil {
+		base, apiKey := loadConfig()
+		if apiKey == "" {
+			return fmt.Errorf("DEEPSEEK_API_KEY not set")
+		}
+		client = NewClient(base, apiKey)
+	}
+	out, err := client.do("GET", "/models", nil)
+	if err != nil {
+		return err
+	}
+	return formatModelsResponse(out)
+}
+
+// executeBalanceCommand executes the balance command with an optional client for testability
+func executeBalanceCommand(cmd *cobra.Command, client APIClientIface) error {
+	// If no client provided, load config and check API key
+	if client == nil {
+		base, apiKey := loadConfig()
+		if apiKey == "" {
+			return fmt.Errorf("DEEPSEEK_API_KEY not set")
+		}
+		client = NewClient(base, apiKey)
+	}
+	out, err := client.do("GET", "/user/balance", nil)
+	if err != nil {
+		return err
+	}
+	return formatBalanceResponse(out)
+}
+
 // Helper functions for flag access
 func mustGetString(cmd *cobra.Command, name string) string {
 	val, _ := cmd.Flags().GetString(name)
@@ -649,19 +677,23 @@ func executeTUI(cmd *cobra.Command, config *Config) error {
 }
 
 func handleSingleTurn(cmd *cobra.Command, prompt string, config *Config) error {
-	return executeSingleTurn(cmd, prompt, config)
+	return executeSingleTurn(cmd, prompt, config, nil)
 }
 
-func executeSingleTurn(cmd *cobra.Command, prompt string, config *Config) error {
-	// Load config
-	base, apiKey := loadConfig()
-	if apiKey == "" {
-		return fmt.Errorf("DEEPSEEK_API_KEY not set")
-	}
+func executeSingleTurn(cmd *cobra.Command, prompt string, config *Config, client APIClientIface) error {
+	// If no client provided, load config and check API key
+	if client == nil {
+		base, apiKey := loadConfig()
+		if apiKey == "" {
+			return fmt.Errorf("DEEPSEEK_API_KEY not set")
+		}
 
-	// Check for base-url override
-	if baseURL, _ := cmd.Flags().GetString("base-url"); baseURL != "" {
-		base = baseURL
+		// Check for base-url override
+		if baseURL, _ := cmd.Flags().GetString("base-url"); baseURL != "" {
+			base = baseURL
+		}
+
+		client = NewClient(base, apiKey)
 	}
 
 	// Build request
@@ -683,7 +715,6 @@ func executeSingleTurn(cmd *cobra.Command, prompt string, config *Config) error 
 		return err
 	}
 
-	client := NewClient(base, apiKey)
 	out, err := client.do("POST", "/chat/completions", req)
 	if err != nil {
 		return err
@@ -693,10 +724,10 @@ func executeSingleTurn(cmd *cobra.Command, prompt string, config *Config) error 
 }
 
 func handleHistoryMode(cmd *cobra.Command, historyPath string, config *Config) error {
-	return executeHistoryMode(cmd, historyPath, config)
+	return executeHistoryMode(cmd, historyPath, config, nil)
 }
 
-func executeHistoryMode(cmd *cobra.Command, historyPath string, config *Config) error {
+func executeHistoryMode(cmd *cobra.Command, historyPath string, config *Config, client APIClientIface) error {
 	// Load history file
 	data, err := os.ReadFile(historyPath)
 	if err != nil {
@@ -709,10 +740,14 @@ func executeHistoryMode(cmd *cobra.Command, historyPath string, config *Config) 
 		return fmt.Errorf("parsing history file: %w", err)
 	}
 
-	// Load config
-	base, apiKey := loadConfig()
-	if apiKey == "" {
-		return fmt.Errorf("DEEPSEEK_API_KEY not set")
+	// If no client provided, load config and check API key
+	if client == nil {
+		base, apiKey := loadConfig()
+		if apiKey == "" {
+			return fmt.Errorf("DEEPSEEK_API_KEY not set")
+		}
+
+		client = NewClient(base, apiKey)
 	}
 
 	// Build request with history
@@ -734,7 +769,6 @@ func executeHistoryMode(cmd *cobra.Command, historyPath string, config *Config) 
 		return err
 	}
 
-	client := NewClient(base, apiKey)
 	out, err := client.do("POST", "/chat/completions", req)
 	if err != nil {
 		return err
@@ -744,10 +778,10 @@ func executeHistoryMode(cmd *cobra.Command, historyPath string, config *Config) 
 }
 
 func handleStdinMode(cmd *cobra.Command, config *Config) error {
-	return executeStdinMode(cmd, config)
+	return executeStdinMode(cmd, config, nil)
 }
 
-func executeStdinMode(cmd *cobra.Command, config *Config) error {
+func executeStdinMode(cmd *cobra.Command, config *Config, client APIClientIface) error {
 	// Read from stdin
 	data, err := io.ReadAll(os.Stdin)
 	if err != nil {
@@ -759,5 +793,14 @@ func executeStdinMode(cmd *cobra.Command, config *Config) error {
 		return fmt.Errorf("no input provided via stdin")
 	}
 
-	return executeSingleTurn(cmd, prompt, config)
+	// If no client provided, load config and check API key
+	if client == nil {
+		base, apiKey := loadConfig()
+		if apiKey == "" {
+			return fmt.Errorf("DEEPSEEK_API_KEY not set")
+		}
+		client = NewClient(base, apiKey)
+	}
+
+	return executeSingleTurn(cmd, prompt, config, client)
 }

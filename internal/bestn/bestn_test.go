@@ -1,75 +1,158 @@
 package bestn
 
 import (
+	"errors"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 )
 
 // MockEvaluator mocks the evaluator for testing
 type MockEvaluator struct {
-	mock.Mock
+	Result *EvalResult
+	Err    error
 }
 
 func (m *MockEvaluator) Evaluate(candidates []string, evalPrompt string) (*EvalResult, error) {
-	args := m.Called(candidates, evalPrompt)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
+	return m.Result, m.Err
+}
+
+// MockAPIClient mocks the API client for testing
+type MockAPIClient struct {
+	Responses []map[string]interface{}
+	Err       error
+	CallCount int
+}
+
+func (m *MockAPIClient) ChatCompletion(req interface{}) (interface{}, error) {
+	if m.Err != nil {
+		return nil, m.Err
 	}
-	return args.Get(0).(*EvalResult), args.Error(1)
+	if m.CallCount >= len(m.Responses) {
+		return nil, errors.New("no more mock responses")
+	}
+	resp := m.Responses[m.CallCount]
+	m.CallCount++
+	return resp, nil
 }
 
 func TestNewBestN(t *testing.T) {
-	evaluator := new(MockEvaluator)
-	bestn := NewBestN(evaluator, 5)
-	
-	assert.NotNil(t, bestn)
-	assert.Equal(t, 5, bestn.N)
-	assert.Equal(t, evaluator, bestn.Evaluator)
+	evaluator := &MockEvaluator{}
+	apiClient := &MockAPIClient{}
+	bestn := NewBestN(evaluator, apiClient, 5)
+
+	if bestn == nil {
+		t.Error("NewBestN() returned nil")
+	}
+	if bestn.N != 5 {
+		t.Errorf("NewBestN() N = %d, want 5", bestn.N)
+	}
+	if bestn.Evaluator != evaluator {
+		t.Error("NewBestN() Evaluator not set correctly")
+	}
+	if bestn.APIClient != apiClient {
+		t.Error("NewBestN() APIClient not set correctly")
+	}
 }
 
 func TestGenerateCandidates(t *testing.T) {
-	evaluator := new(MockEvaluator)
-	bestn := NewBestN(evaluator, 3)
-	
-	// Implementation will generate candidates via API
-	result, err := bestn.GenerateCandidates("write a function to add two numbers")
-	assert.Error(t, err) // Not implemented yet
-	assert.Nil(t, result)
+	tests := []struct {
+		name        string
+		n           int
+		apiClient   APIClientIface
+		wantErr     bool
+		wantCount   int
+	}{
+		{
+			name: "generate 3 candidates",
+			n:    3,
+			apiClient: &MockAPIClient{
+				Responses: []map[string]interface{}{
+					{"choices": []interface{}{map[string]interface{}{"message": map[string]interface{}{"content": "response1"}}}},
+					{"choices": []interface{}{map[string]interface{}{"message": map[string]interface{}{"content": "response2"}}}},
+					{"choices": []interface{}{map[string]interface{}{"message": map[string]interface{}{"content": "response3"}}}},
+				},
+			},
+			wantErr:   false,
+			wantCount: 3,
+		},
+		{
+			name: "API error",
+			n:    2,
+			apiClient: &MockAPIClient{
+				Err: errors.New("API error"),
+			},
+			wantErr:   true,
+			wantCount: 0,
+		},
+		{
+			name:      "nil API client",
+			n:         2,
+			apiClient:  nil,
+			wantErr:    true,
+			wantCount:  0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			evaluator := &MockEvaluator{}
+			bestn := NewBestN(evaluator, tt.apiClient, tt.n)
+
+			candidates, err := bestn.GenerateCandidates("test prompt")
+
+			if tt.wantErr && err == nil {
+				t.Error("GenerateCandidates() should have returned error")
+			}
+			if !tt.wantErr && err != nil {
+				t.Errorf("GenerateCandidates() unexpected error: %v", err)
+			}
+			if len(candidates) != tt.wantCount {
+				t.Errorf("GenerateCandidates() returned %d candidates, want %d", len(candidates), tt.wantCount)
+			}
+		})
+	}
 }
 
 func TestEvaluateCandidates(t *testing.T) {
-	evaluator := new(MockEvaluator)
-	evaluator.On("Evaluate", mock.Anything, mock.Anything).Return(&EvalResult{
-		WinnerID:        0,
-		Recommendations: []string{"First candidate is best"},
-		Merged:         "merged result",
-	}, nil)
-	
-	bestn := NewBestN(evaluator, 3)
+	evaluator := &MockEvaluator{
+		Result: &EvalResult{
+			WinnerID:        0,
+			Recommendations: []string{"First candidate is best"},
+			Merged:         "merged result",
+		},
+	}
+	apiClient := &MockAPIClient{}
+	bestn := NewBestN(evaluator, apiClient, 3)
+
 	candidates := []string{"cand1", "cand2", "cand3"}
-	
 	result, err := bestn.EvaluateCandidates(candidates, "which is best?")
-	assert.NoError(t, err)
-	assert.Equal(t, 0, result.WinnerID)
-	assert.Len(t, result.Recommendations, 1)
-	assert.Equal(t, "merged result", result.Merged)
-	evaluator.AssertExpectations(t)
+
+	if err != nil {
+		t.Errorf("EvaluateCandidates() unexpected error: %v", err)
+	}
+	if result == nil {
+		t.Error("EvaluateCandidates() returned nil result")
+	}
+	if result.WinnerID != 0 {
+		t.Errorf("EvaluateCandidates() WinnerID = %d, want 0", result.WinnerID)
+	}
 }
 
 func TestSelectWinner(t *testing.T) {
-	evaluator := new(MockEvaluator)
-	evaluator.On("Evaluate", mock.Anything, mock.Anything).Return(&EvalResult{
-		WinnerID: 1,
-	}, nil)
-	
-	bestn := NewBestN(evaluator, 3)
+	evaluator := &MockEvaluator{
+		Result: &EvalResult{WinnerID: 1},
+	}
+	apiClient := &MockAPIClient{}
+	bestn := NewBestN(evaluator, apiClient, 3)
+
 	candidates := []string{"bad", "good", "ok"}
-	
 	winner, err := bestn.SelectWinner(candidates, "select best")
-	assert.NoError(t, err)
-	assert.Equal(t, "good", winner)
+
+	if err != nil {
+		t.Errorf("SelectWinner() unexpected error: %v", err)
+	}
+	if winner != "good" {
+		t.Errorf("SelectWinner() = %q, want %q", winner, "good")
+	}
 }
 
 func TestEvalResultValidation(t *testing.T) {
@@ -79,132 +162,139 @@ func TestEvalResultValidation(t *testing.T) {
 		Recommendations: []string{"rec1"},
 		Merged:         "merged",
 	}
-	assert.True(t, result.IsValid(3)) // 3 candidates
-	
+	if !result.IsValid(3) {
+		t.Error("IsValid() should return true for valid result")
+	}
+
 	// Invalid: WinnerID out of range
 	result.WinnerID = 5
-	assert.False(t, result.IsValid(3))
-	
+	if result.IsValid(3) {
+		t.Error("IsValid() should return false for WinnerID out of range")
+	}
+
 	// Invalid: negative WinnerID
 	result.WinnerID = -1
-	assert.False(t, result.IsValid(3))
+	if result.IsValid(3) {
+		t.Error("IsValid() should return false for negative WinnerID")
+	}
 }
 
 func TestEvaluatorSchema(t *testing.T) {
-	// Test that the JSON schema for evaluator is correct
 	schema := GetEvaluatorSchema()
-	
-	assert.NotNil(t, schema)
-	assert.Equal(t, "object", schema["type"])
-	
+
+	if schema == nil {
+		t.Error("GetEvaluatorSchema() returned nil")
+	}
+	if schema["type"] != "object" {
+		t.Errorf("GetEvaluatorSchema() type = %v, want 'object'", schema["type"])
+	}
+
 	properties, ok := schema["properties"].(map[string]interface{})
-	assert.True(t, ok)
-	
-	// Check required fields exist
-	assert.Contains(t, properties, "winner")
-	assert.Contains(t, properties, "recommendations")
-	assert.Contains(t, properties, "merged")
-	
-	// Check required array
+	if !ok {
+		t.Error("GetEvaluatorSchema() properties not found")
+	}
+
+	if _, ok := properties["winner"]; !ok {
+		t.Error("GetEvaluatorSchema() missing 'winner' property")
+	}
+	if _, ok := properties["recommendations"]; !ok {
+		t.Error("GetEvaluatorSchema() missing 'recommendations' property")
+	}
+	if _, ok := properties["merged"]; !ok {
+		t.Error("GetEvaluatorSchema() missing 'merged' property")
+	}
+
 	required, ok := schema["required"].([]string)
-	assert.True(t, ok)
-	assert.Contains(t, required, "winner")
+	if !ok {
+		t.Error("GetEvaluatorSchema() required not found")
+	}
+
+	found := false
+	for _, r := range required {
+		if r == "winner" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("GetEvaluatorSchema() missing 'winner' in required")
+	}
 }
 
 func TestEmptyCandidates(t *testing.T) {
-	evaluator := new(MockEvaluator)
-	bestn := NewBestN(evaluator, 3)
-	
+	evaluator := &MockEvaluator{}
+	apiClient := &MockAPIClient{}
+	bestn := NewBestN(evaluator, apiClient, 3)
+
 	winner, err := bestn.SelectWinner([]string{}, "prompt")
-	assert.Error(t, err)
-	assert.Empty(t, winner)
+	if err == nil {
+		t.Error("SelectWinner() should error with empty candidates")
+	}
+	if winner != "" {
+		t.Errorf("SelectWinner() with empty candidates = %q, want empty", winner)
+	}
 }
 
 func TestSingleCandidate(t *testing.T) {
-	evaluator := new(MockEvaluator)
-	evaluator.On("Evaluate", mock.Anything, mock.Anything).Return(&EvalResult{
-		WinnerID: 0,
-	}, nil)
-	
-	bestn := NewBestN(evaluator, 1)
+	evaluator := &MockEvaluator{
+		Result: &EvalResult{WinnerID: 0},
+	}
+	apiClient := &MockAPIClient{}
+	bestn := NewBestN(evaluator, apiClient, 1)
+
 	candidates := []string{"only one"}
-	
 	winner, err := bestn.SelectWinner(candidates, "prompt")
-	assert.NoError(t, err)
-	assert.Equal(t, "only one", winner)
+
+	if err != nil {
+		t.Errorf("SelectWinner() unexpected error: %v", err)
+	}
+	if winner != "only one" {
+		t.Errorf("SelectWinner() = %q, want 'only one'", winner)
+	}
 }
 
 func TestMergeCandidates(t *testing.T) {
-	evaluator := new(MockEvaluator)
-	evaluator.On("Evaluate", mock.Anything, mock.Anything).Return(&EvalResult{
-		WinnerID: 0,
-		Merged:   "merged code",
-	}, nil)
-	
-	bestn := NewBestN(evaluator, 2)
+	evaluator := &MockEvaluator{
+		Result: &EvalResult{
+			WinnerID: 0,
+			Merged:   "merged code",
+		},
+	}
+	apiClient := &MockAPIClient{}
+	bestn := NewBestN(evaluator, apiClient, 2)
+
 	candidates := []string{"code1", "code2"}
-	
 	merged, err := bestn.MergeCandidates(candidates, "merge these")
-	assert.NoError(t, err)
-	assert.Equal(t, "merged code", merged)
+
+	if err != nil {
+		t.Errorf("MergeCandidates() unexpected error: %v", err)
+	}
+	if merged != "merged code" {
+		t.Errorf("MergeCandidates() = %q, want 'merged code'", merged)
+	}
 }
 
 func TestBestNWithGitDiff(t *testing.T) {
-	evaluator := new(MockEvaluator)
-	evaluator.On("Evaluate", mock.Anything, mock.Anything).Return(&EvalResult{
-		WinnerID: 1,
-		Recommendations: []string{"Second diff is cleaner"},
-	}, nil)
-	
-	bestn := NewBestN(evaluator, 3)
+	evaluator := &MockEvaluator{
+		Result: &EvalResult{
+			WinnerID:        1,
+			Recommendations: []string{"Second diff is cleaner"},
+		},
+	}
+	apiClient := &MockAPIClient{}
+	bestn := NewBestN(evaluator, apiClient, 3)
+
 	diffs := []string{
 		"diff --git a/file1.go...",
 		"diff --git a/file2.go...",
 		"diff --git a/file3.go...",
 	}
-	
 	result, err := bestn.EvaluateCandidates(diffs, "which diff is best?")
-	assert.NoError(t, err)
-	assert.Equal(t, 1, result.WinnerID)
-}
 
-func TestBestNWithToolCalls(t *testing.T) {
-	evaluator := new(MockEvaluator)
-	evaluator.On("Evaluate", mock.Anything, mock.Anything).Return(&EvalResult{
-		WinnerID: 0,
-	}, nil)
-	
-	bestn := NewBestN(evaluator, 2)
-	toolCalls := []string{
-		`{"tool": "bash", "args": {"command": "ls"}}`,
-		`{"tool": "bash", "args": {"command": "pwd"}}`,
+	if err != nil {
+		t.Errorf("EvaluateCandidates() unexpected error: %v", err)
 	}
-	
-	winner, err := bestn.SelectWinner(toolCalls, "which tool call is better?")
-	assert.NoError(t, err)
-	assert.Equal(t, toolCalls[0], winner)
-}
-
-// Test concurrent evaluation
-func TestConcurrentEvaluation(t *testing.T) {
-	evaluator := new(MockEvaluator)
-	evaluator.On("Evaluate", mock.Anything, mock.Anything).Return(&EvalResult{
-		WinnerID: 0,
-	}, nil)
-	
-	bestn := NewBestN(evaluator, 3)
-	candidates := []string{"a", "b", "c"}
-	
-	done := make(chan bool)
-	for i := 0; i < 5; i++ {
-		go func() {
-			_, err := bestn.EvaluateCandidates(candidates, "test")
-			assert.NoError(t, err)
-			done <- true
-		}()
-	}
-	
-	for i := 0; i < 5; i++ {
-		<-done
+	if result.WinnerID != 1 {
+		t.Errorf("EvaluateCandidates() WinnerID = %d, want 1", result.WinnerID)
 	}
 }

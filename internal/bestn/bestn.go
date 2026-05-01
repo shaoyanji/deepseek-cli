@@ -14,24 +14,80 @@ type EvaluatorIface interface {
 	Evaluate(candidates []string, evalPrompt string) (*EvalResult, error)
 }
 
+// APIClientIface represents the API client interface for generating candidates
+type APIClientIface interface {
+	ChatCompletion(req interface{}) (interface{}, error)
+}
+
 // BestN implements the Best N evaluation logic
 type BestN struct {
 	Evaluator EvaluatorIface
+	APIClient APIClientIface
 	N         int
 }
 
 // NewBestN creates a new BestN instance
-func NewBestN(evaluator EvaluatorIface, n int) *BestN {
+func NewBestN(evaluator EvaluatorIface, apiClient APIClientIface, n int) *BestN {
 	return &BestN{
 		Evaluator: evaluator,
+		APIClient: apiClient,
 		N:         n,
 	}
 }
 
 // GenerateCandidates generates N candidate responses
 func (b *BestN) GenerateCandidates(prompt string) ([]string, error) {
-	// Implementation will use draft model or multiple API calls
-	return nil, fmt.Errorf("not implemented")
+	// Check if APIClient is nil or holds a nil pointer
+	if b.APIClient == nil {
+		return nil, fmt.Errorf("no API client configured")
+	}
+
+	// Type assert to check if the underlying value is nil
+	if mc, ok := b.APIClient.(*MockAPIClient); ok && mc == nil {
+		return nil, fmt.Errorf("no API client configured")
+	}
+
+	if b.N <= 0 {
+		return nil, fmt.Errorf("N must be positive")
+	}
+
+	candidates := make([]string, 0, b.N)
+	for i := 0; i < b.N; i++ {
+		req := map[string]interface{}{
+			"model": "deepseek-v4-pro",
+			"messages": []map[string]string{
+				{"role": "user", "content": prompt},
+			},
+		}
+		resp, err := b.APIClient.ChatCompletion(req)
+		if err != nil {
+			return nil, fmt.Errorf("API call %d failed: %w", i, err)
+		}
+
+		// Extract content from response
+		respMap, ok := resp.(map[string]interface{})
+		if !ok {
+			return nil, fmt.Errorf("invalid response format")
+		}
+		choices, ok := respMap["choices"].([]interface{})
+		if !ok || len(choices) == 0 {
+			return nil, fmt.Errorf("no choices in response")
+		}
+		choice, ok := choices[0].(map[string]interface{})
+		if !ok {
+			return nil, fmt.Errorf("invalid choice format")
+		}
+		message, ok := choice["message"].(map[string]interface{})
+		if !ok {
+			return nil, fmt.Errorf("no message in choice")
+		}
+		content, ok := message["content"].(string)
+		if !ok {
+			return nil, fmt.Errorf("no content in message")
+		}
+		candidates = append(candidates, content)
+	}
+	return candidates, nil
 }
 
 // EvaluateCandidates evaluates candidates and returns the full result
