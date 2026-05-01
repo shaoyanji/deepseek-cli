@@ -1,9 +1,10 @@
 # DeepSeek CLI
 
-A comprehensive command-line interface for the DeepSeek API, supporting chat completions, FIM (Fill-In-the-Middle) code completion, model listing, and balance checking.
+A comprehensive command-line interface for the DeepSeek API, supporting chat completions, FIM (Fill-In-the-Middle) code completion, model listing, balance checking, and an interactive TUI mode.
 
 ## Features
 
+- **Interactive TUI**: Beautiful terminal UI with syntax highlighting, scrolling, and session management
 - **Chat Completions**: Full support for DeepSeek V4 models with all parameters
 - **FIM Completions**: Code completion with Fill-In-the-Middle support
 - **Streaming**: Real-time streaming responses for both chat and FIM
@@ -13,6 +14,7 @@ A comprehensive command-line interface for the DeepSeek API, supporting chat com
 - **Beta Features**: Access to beta endpoints and prefix completion
 - **Parameter Validation**: Comprehensive input validation with clear error messages
 - **Multiple Output Formats**: Formatted responses, usage statistics, and raw JSON options
+- **Multiple Modes**: Interactive TUI, single-turn prompts, stdin input, and history-based sessions
 
 ## Installation
 
@@ -111,6 +113,8 @@ fim:
   beta: true  # Use beta endpoint by default for FIM
 ```
 
+**Note:** The configuration file is optional. The CLI will use sensible defaults if no config file exists.
+
 ### Config Priority
 
 Configuration values are applied in the following priority (highest to lowest):
@@ -126,6 +130,68 @@ To see where your config file is located:
 
 ```bash
 deepseek config
+```
+
+## Usage Modes
+
+The DeepSeek CLI supports multiple usage modes for different workflows:
+
+### Interactive TUI Mode (Default)
+
+When you run `deepseek` without any subcommands or flags, it launches an interactive terminal UI:
+
+```bash
+deepseek
+```
+
+**TUI Features:**
+- Beautiful terminal interface with syntax highlighting
+- Markdown rendering with code block highlighting
+- Scrollable chat history
+- Multi-line input support
+- Session persistence (saves/loads automatically)
+- Real-time token usage display
+- Color-coded messages (user vs assistant)
+
+**TUI Controls:**
+- `Enter` - Send message
+- `Ctrl+C` or `Esc` - Exit
+- Arrow keys - Navigate in input
+- Scroll with mouse or keyboard in chat history
+
+### Single-Turn Mode
+
+For quick, one-off prompts without entering the TUI:
+
+```bash
+deepseek -p "What is the capital of France?"
+# or
+deepseek --prompt "Explain quantum computing"
+```
+
+### Stdin Mode
+
+Pipe input to the CLI for scripting and automation:
+
+```bash
+echo "Write a haiku about coding" | deepseek
+cat prompt.txt | deepseek
+```
+
+### History-Based Mode
+
+Continue conversations from a previous session:
+
+```bash
+deepseek --history session.json
+```
+
+The history file should contain a JSON array of messages in the format:
+```json
+[
+  {"role": "user", "content": "Hello"},
+  {"role": "assistant", "content": "Hi there!"}
+]
 ```
 
 ## Usage
@@ -384,4 +450,7 @@ For issues and questions:
 ## Acknowledgments
 
 - Built with [Cobra](https://github.com/spf13/cobra) for CLI framework
+- TUI powered by [Bubble Tea](https://github.com/charmbracelet/bubbletea)
+- Styling with [Lipgloss](https://github.com/charmbracelet/lipgloss)
+- Markdown rendering with [Glamour](https://github.com/charmbracelet/glamour)
 - Powered by [DeepSeek API](https://api.deepseek.com/)

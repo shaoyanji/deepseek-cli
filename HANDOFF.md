@@ -315,3 +315,65 @@ fim:
 - CLI flag defaults are set from config values
 - Environment variables override config file values
 - CLI flags override everything
+
+---
+
+# Session Update (Build Mode Activated)
+
+## New Direction: Transform to Agentic Code Execution Harness
+
+**Goal**: Transform from API CLI → agentic code execution harness (like `charmbracelet/crush`) with:
+- Bubble Tea TUI, speculative decoding, Best N evaluation
+- **100% test coverage** via strict TDD
+
+## Session Work Completed
+
+### ✅ PLAN.md Created
+Full transformation plan with 7 phases, TDD-first approach, coverage enforcement.
+
+### ✅ TDD Test Stubs & Implementation (Build Mode)
+**Internal packages created** (`internal/*`):
+1. `internal/agent/` - Tool interface, ToolRegistry, built-in tools (View, Edit, Bash, LS, Grep, Git)
+2. `internal/exec/` - Code execution (Go, Python, Node), language detection, sandboxed execution
+3. `internal/speculative/` - Client-side speculative decoding (draft/verify), KV cache reuse
+4. `internal/bestn/` - Best N evaluation, DeepSeek as judge, JSON schema validation
+5. `internal/tui/` - Bubble Tea model, chat/view/status rendering, session management
+
+**Test results** (TDD green phase):
+- `internal/agent`: 87.4% coverage (100% for implemented functions)
+- `internal/exec`: 82.7% coverage (100% for implemented functions)
+- `internal/speculative`: 70.1% coverage (100% for implemented functions)
+- `internal/bestn`: 85.7% coverage (100% for implemented functions)
+- `internal/tui`: 92.9% coverage (100% for implemented functions)
+- `main` package: 13.1% (needs more tests for response.go, streaming.go)
+
+**Test files created**:
+- `validation_test.go` (12 tests for ValidateChatRequest, ValidateFIMRequest)
+- `client_test.go` (7 tests for NewClient, LoadConfig, getEnv)
+- `config_test.go` (8 tests for GetDefaultChatConfig, CreateSampleConfig, LoadConfig)
+- `internal/*/agent_test.go`, `exec_test.go`, `speculative_test.go`, `bestn_test.go`, `tui_test.go`
+
+### ✅ Taskfile.yml Updated
+New targets for CI/coverage:
+- `task test` - Run all tests with 100% coverage check
+- `task lint` - Run golangci-lint
+- `task ci` - Full CI (fmt + vet + lint + test)
+- `task coverage:html` - Generate HTML coverage report
+
+## Current State
+- **Mode**: Build (not plan mode)
+- **Dependencies added**: Bubble Tea, Lipgloss, Bubbles, Glamour, Testify
+- **Go version**: Updated to 1.24.0
+- **All internal package tests**: Passing (green phase complete)
+- **Main package coverage**: 13.1% (needs work on response.go, streaming.go, main.go)
+
+## Next Steps
+1. Increase main package coverage to 100% (response.go, streaming.go, main.go tests)
+2. Complete TUI implementation (Bubble Tea views, input, viewport)
+3. Implement remaining speculative decoding logic
+4. Complete Best N evaluation with DeepSeek evaluator
+5. Add `-p` flag, stdin support, TUI launch to main CLI
+
+## Reference
+- `PLAN.md` - Full transformation plan with 7 phases
+- `internal/*/agent_test.go` - TDD test examples for all packages
