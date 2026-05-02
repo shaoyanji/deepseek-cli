@@ -1,61 +1,58 @@
-# Binaries for programs and plugins
-*.exe
-*.exe~
-*.dll
+```
+# Coverage reports
+coverage.html
+coverage.out
+
+# Binaries
+deepseek-cli
+
+# Go build artifacts
+*.o
+*.a
 *.so
 *.dylib
-deepseek
-deepseek-cli
-deepseek-*
+*.dll
+*.exe
 
-# Test binary, built with `go test -c`
-*.test
+# Test coverage
+coverage/
+htmlcov/
+.coverage
 
-# Output of the go coverage tool
-*.out
-
-# Dependency directories
+# Dependencies
 vendor/
 
-# Go workspace file
-go.work
+# Logs
+*.log
 
-# Build directories
-build/
-dist/
+# Environment
+.env
+.env.local
+*.env.*
 
-# IDE specific files
+# Editors
 .vscode/
 .idea/
 *.swp
 *.swo
-*~
 
-# OS specific files
+# OS
 .DS_Store
 Thumbs.db
 
-# Environment files
+# Build
+bin/
+target/
+dist/
+build/
+
+# Python (if any Python files exist in project)
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+venv/
+.venv/
 .env
-.env.local
-.env.*.local
-
-# Config files (user-specific)
-.config/deepseek-cli/
-
-# Temporary files
-tmp/
-temp/
-*.tmp
-
-# Coverage files
-coverage.txt
-coverage.html
-
-# Debug files
-debug
-__debug_bin
-
-# Development tools
-.devin/
-.task/
+```

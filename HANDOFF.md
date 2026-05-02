@@ -497,3 +497,149 @@ Refactored to remove `testify` dependency:
 3. Complete any remaining TUI features if needed
 4. Consider adding integration tests for end-to-end workflows
 
+---
+
+# CI/CD Integration (2026-05-01)
+
+## Overview
+Added GitHub Actions workflow for automated testing, linting, and building.
+
+## Files Added
+
+### .github/workflows/test.yml
+Created comprehensive CI pipeline with three jobs:
+
+1. **Test Job**:
+   - Runs on Ubuntu latest
+   - Executes all unit tests with race detection
+   - Generates coverage report
+   - Uploads coverage to Codecov
+   - Enforces 70% minimum coverage threshold
+
+2. **Lint Job**:
+   - Runs golangci-lint with 5-minute timeout
+   - Catches code quality issues early
+
+3. **Build Job**:
+   - Depends on test job passing
+   - Builds production binary for Linux AMD64
+   - Uploads artifact for 7 days retention
+
+## Coverage Threshold Rationale
+
+Set at 70% (not 100%) due to:
+- Entry point functions (`main()`) cannot be tested by design
+- External dependency requirements (Docker, gopls) not available in CI
+- Interactive TUI components difficult to automate
+- Dead code paths that should be removed
+
+## Current Coverage Status
+- Overall: 78.7%
+- Main package: 81.6%
+- Internal packages: 66-87% range
+
+See "Test Coverage Limitations" section below for detailed analysis.
+
+---
+
+# Adaptive Speculative Decoding Implementation (2026-05-01)
+
+## Overview
+Implemented agentic speculative decoding concept using tool call failures as difficulty metric.
+
+## New Files
+
+### internal/speculative/adaptive.go
+Created `AdaptiveSpeculativeDecoder` with:
+
+1. **Failure-based Difficulty Tracking**:
+   - `RecordFailure()` - increments failure count, adjusts difficulty (0-3)
+   - `Reset()` - resets counters after success
+   - `GetDifficultyLevel()` - returns current difficulty level
+
+2. **Adaptive Model Selection**:
+   - `ShouldUsePro()` - escalates to Pro when difficulty ≥ 2 or failures ≥ 3
+   - `AdaptiveDecode()` - uses Flash for low difficulty, Pro for high
+
+3. **Variadic Call Spawning (Best-N style)**:
+   - `SpawnVariadicCalls(prompt, n)` - parallel Flash calls with varying temperatures
+   - Returns multiple candidate responses even with partial failures
+
+4. **Pro-as-Judge Evaluation**:
+   - `EvaluateAndSelect(candidates, evalPrompt)` - Pro selects best candidate
+   - Deterministic evaluation (temperature=0.0)
+
+### internal/speculative/adaptive_test.go
+Comprehensive test coverage including:
+- Failure counting and difficulty escalation
+- Reset functionality
+- Pro model selection thresholds
+- Variadic call spawning scenarios
+- Candidate evaluation and selection
+- End-to-end adaptive decode flow
+
+## Usage Pattern
+
+```go
+decoder := NewAdaptiveSpeculativeDecoder(client, "deepseek-v4-flash", "deepseek-v4-pro", 5)
+
+// In agent loop:
+result, err := decoder.AdaptiveDecode(prompt)
+if err != nil {
+    decoder.RecordFailure() // Track failure for next iteration
+    
+    // For difficult problems, spawn variadic calls
+    if decoder.GetDifficultyLevel() >= 2 {
+        candidates, _ := decoder.SpawnVariadicCalls(prompt, 5)
+        result, _ = decoder.EvaluateAndSelect(candidates, "select best solution")
+    }
+} else {
+    decoder.Reset() // Success - reset counters
+}
+```
+
+## Design Philosophy
+
+This implements the vision of:
+- Using tool call failures as running difficulty count
+- Spawning variadic Flash calls for difficult problems
+- Using Pro in speculative/judge capacity rather than initial generation
+- Cost-effective scaling: Flash for easy tasks, Pro only when needed
+
+---
+
+# Test Coverage Limitations
+
+## Functions with 0% Coverage
+
+1. **`main()` function** - Untestable by design (program entry point)
+2. **`SetStreaming()` and `AppendToLastMessage()`** - Dead code, never called
+3. **`queryGopls()`** - Requires gopls installation not available in test environment
+4. **`ExecSandboxedDocker()`** - Requires Docker daemon not available in most CI environments
+
+## Functions with Low Coverage
+
+1. **`ExecSandboxed()` (66.7%)** - Limited by language support paths
+2. **`createTempFile()` (71.4%)** - File system edge cases
+3. **`executeTUI()` (25.0%)** - Interactive TUI testing challenges
+
+## Root Causes
+
+1. **Entry point limitations** - `main()` function cannot be tested directly
+2. **Unused/dead code** - Functions defined but never called
+3. **External dependencies** - gopls, Docker not available in test environment
+4. **Interactive UI components** - Bubble Tea TUI difficult to test programmatically
+
+## Realistic Coverage Target
+
+**78-82%** is realistic and sustainable for this CLI tool with external dependencies.
+
+## Recommended Actions
+
+1. Remove dead code (`SetStreaming()`, `AppendToLastMessage()`)
+2. Add mocks for external dependencies (gopls, Docker)
+3. Consider separate integration tests for dependency-heavy functionality
+4. Accept that some functions (main, interactive TUI) will have limited testability
+
+---
+
