@@ -40,7 +40,7 @@ func TestNewBestN(t *testing.T) {
 	bestn := NewBestN(evaluator, apiClient, 5)
 
 	if bestn == nil {
-		t.Error("NewBestN() returned nil")
+		t.Fatal("NewBestN() returned nil")
 	}
 	if bestn.N != 5 {
 		t.Errorf("NewBestN() N = %d, want 5", bestn.N)
@@ -130,7 +130,7 @@ func TestEvaluateCandidates(t *testing.T) {
 		t.Errorf("EvaluateCandidates() unexpected error: %v", err)
 	}
 	if result == nil {
-		t.Error("EvaluateCandidates() returned nil result")
+		t.Fatal("EvaluateCandidates() returned nil result")
 	}
 	if result.WinnerID != 0 {
 		t.Errorf("EvaluateCandidates() WinnerID = %d, want 0", result.WinnerID)

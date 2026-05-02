@@ -128,8 +128,13 @@ func (t *EditTool) Run(args map[string]interface{}) (string, error) {
 	// Create backup if file exists
 	if _, err := os.Stat(path); err == nil {
 		backupPath := path + ".bak"
-		data, _ := os.ReadFile(path)
-		os.WriteFile(backupPath, data, 0644)
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return "", fmt.Errorf("reading file for backup: %w", err)
+		}
+		if err := os.WriteFile(backupPath, data, 0644); err != nil {
+			return "", fmt.Errorf("writing backup file: %w", err)
+		}
 	}
 	
 	// Write new content
@@ -238,7 +243,7 @@ func (t *GrepTool) Run(args map[string]interface{}) (string, error) {
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	
-	cmd.Run() // Ignore error as grep returns non-zero if no matches
+	_ = cmd.Run() // Ignore error as grep returns non-zero if no matches
 	
 	return stdout.String(), nil
 }
@@ -322,11 +327,6 @@ func (t *LSPTool) Run(args map[string]interface{}) (string, error) {
 	filePath, ok := args["file"].(string)
 	if !ok || filePath == "" {
 		return "", fmt.Errorf("file argument required")
-	}
-	
-	action, _ := args["action"].(string)
-	if action == "" {
-		action = "hover"
 	}
 	
 	// For Go, use gopls

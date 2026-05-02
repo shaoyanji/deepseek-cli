@@ -643,3 +643,46 @@ This implements the vision of:
 
 ---
 
+# v1.0.4 Release (2026-05-02)
+
+## Overview
+Simplified build process and fixed CI/CD issues for improved reliability.
+
+## Changes
+
+### Build System
+- **Simplified build matrix**: Reduced from 14 architectures to linux-amd64 only
+  - Previous: linux-386, linux-amd64, linux-arm, linux-arm64, windows-386, windows-amd64, windows-arm64, darwin-amd64, darwin-arm64, freebsd-386, freebsd-amd64, freebsd-arm, freebsd-arm64
+  - Current: linux-amd64 only
+  - Rationale: Faster builds, reduced complexity, focus on primary platform
+
+### CI/CD Improvements
+- **Fixed linting errors**: Resolved all golangci-lint issues
+  - Added proper error handling for unchecked return values
+  - Fixed nil pointer dereference warnings in tests
+  - Cleaned up unused variables and assignments
+- **Fixed test failures**: Resolved test failures in speculative package
+  - Fixed mock response types in adaptive tests
+  - All tests now passing
+
+### Code Quality
+- **Enhanced error handling**: Improved error checking in main code paths
+- **Test reliability**: Fixed flaky tests and improved test stability
+- **Code cleanup**: Removed dead code and improved code hygiene
+
+### Documentation
+- Updated version to 1.0.4 in Taskfile.yml
+- Documented build simplification in HANDOFF.md
+
+## Testing
+- ✅ All unit tests passing
+- ✅ Linter passing (golangci-lint)
+- ✅ Build matrix simplified and tested
+
+## Migration Notes
+- Users on other architectures can build from source using `go install`
+- Linux-amd64 binaries available via GitHub releases
+- No breaking changes to CLI functionality
+
+---
+

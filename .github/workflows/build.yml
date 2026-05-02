@@ -19,83 +19,12 @@ jobs:
     strategy:
       matrix:
         include:
-          # Linux
-          - os: linux
-            arch: 386
-            runner: ubuntu-latest
-            goos: linux
-            goarch: 386
+          # Linux AMD64 only
           - os: linux
             arch: amd64
             runner: ubuntu-latest
             goos: linux
             goarch: amd64
-          - os: linux
-            arch: arm
-            runner: ubuntu-latest
-            goos: linux
-            goarch: arm
-            goarm: 7
-          - os: linux
-            arch: arm64
-            runner: ubuntu-latest
-            goos: linux
-            goarch: arm64
-          
-          # Windows
-          - os: windows
-            arch: 386
-            runner: ubuntu-latest
-            goos: windows
-            goarch: 386
-            ext: .exe
-          - os: windows
-            arch: amd64
-            runner: ubuntu-latest
-            goos: windows
-            goarch: amd64
-            ext: .exe
-          - os: windows
-            arch: arm64
-            runner: ubuntu-latest
-            goos: windows
-            goarch: arm64
-            ext: .exe
-          
-          # macOS
-          - os: darwin
-            arch: amd64
-            runner: macos-latest
-            goos: darwin
-            goarch: amd64
-          - os: darwin
-            arch: arm64
-            runner: macos-latest
-            goos: darwin
-            goarch: arm64
-          
-          # FreeBSD (cross-compile from Linux)
-          - os: freebsd
-            arch: 386
-            runner: ubuntu-latest
-            goos: freebsd
-            goarch: 386
-          - os: freebsd
-            arch: amd64
-            runner: ubuntu-latest
-            goos: freebsd
-            goarch: amd64
-          - os: freebsd
-            arch: arm
-            runner: ubuntu-latest
-            goos: freebsd
-            goarch: arm
-            goarm: 7
-          - os: freebsd
-            arch: arm64
-            runner: ubuntu-latest
-            goos: freebsd
-            goarch: arm64
 
     steps:
       - name: Checkout code

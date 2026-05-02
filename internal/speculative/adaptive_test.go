@@ -124,10 +124,10 @@ func TestSpawnVariadicCalls(t *testing.T) {
 	// Setup mock to return different responses using ChatCompletionFunc
 	callIndex := 0
 	client.ChatCompletionFunc = func(req interface{}) (interface{}, error) {
-		responses := []map[string]interface{}{
-			{"choices": []interface{}{map[string]interface{}{"message": map[string]interface{}{"content": "response1"}}}},
-			{"choices": []interface{}{map[string]interface{}{"message": map[string]interface{}{"content": "response2"}}}},
-			{"choices": []interface{}{map[string]interface{}{"message": map[string]interface{}{"content": "response3"}}}},
+		responses := []*ChatResponse{
+			{Choices: []Choice{{Message: Message{Content: "response1"}}}},
+			{Choices: []Choice{{Message: Message{Content: "response2"}}}},
+			{Choices: []Choice{{Message: Message{Content: "response3"}}}},
 		}
 		
 		if callIndex >= len(responses) {
@@ -163,10 +163,10 @@ func TestSpawnVariadicCallsWithFailures(t *testing.T) {
 	// Setup mock with some failures - use ChatCompletionFunc for fine-grained control
 	callIndex := 0
 	client.ChatCompletionFunc = func(req interface{}) (interface{}, error) {
-		responses := []map[string]interface{}{
-			{"choices": []interface{}{map[string]interface{}{"message": map[string]interface{}{"content": "response1"}}}},
+		responses := []interface{}{
+			&ChatResponse{Choices: []Choice{{Message: Message{Content: "response1"}}}},
 			nil, // This will cause an error
-			{"choices": []interface{}{map[string]interface{}{"message": map[string]interface{}{"content": "response3"}}}},
+			&ChatResponse{Choices: []Choice{{Message: Message{Content: "response3"}}}},
 		}
 		
 		if callIndex >= len(responses) {

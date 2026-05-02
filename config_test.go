@@ -85,10 +85,10 @@ func TestLoadConfigWithInvalidYAML(t *testing.T) {
 	// Create a config file with invalid YAML
 	tmpDir := os.TempDir()
 	configPath := filepath.Join(tmpDir, ".config", "deepseek-cli")
-	os.MkdirAll(configPath, 0755)
+	_ = os.MkdirAll(configPath, 0755)
 	configFile := filepath.Join(configPath, "config.yaml")
 	
-	os.WriteFile(configFile, []byte("invalid: [yaml: content"), 0644)
+	_ = os.WriteFile(configFile, []byte("invalid: [yaml: content"), 0644)
 	defer os.RemoveAll(configPath)
 	
 	os.Setenv("HOME", tmpDir)
