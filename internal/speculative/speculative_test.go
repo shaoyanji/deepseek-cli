@@ -1,6 +1,7 @@
 package speculative
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -10,14 +11,52 @@ import (
 // MockAPIClient mocks the API client for testing
 type MockAPIClient struct {
 	mock.Mock
+	Responses         []map[string]interface{}
+	Err               error
+	CallCount         int
+	ChatCompletionFunc func(req interface{}) (interface{}, error)
 }
 
 func (m *MockAPIClient) ChatCompletion(req interface{}) (interface{}, error) {
-	args := m.Called(req)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
+	if m.ChatCompletionFunc != nil {
+		return m.ChatCompletionFunc(req)
 	}
-	return args.Get(0), args.Error(1)
+	if m.Err != nil {
+		return nil, m.Err
+	}
+	if m.CallCount >= len(m.Responses) {
+		return nil, fmt.Errorf("no more mock responses")
+	}
+	respMap := m.Responses[m.CallCount]
+	m.CallCount++
+	
+	// Convert map to ChatResponse struct
+	resp := &ChatResponse{}
+	if choices, ok := respMap["choices"].([]map[string]interface{}); ok {
+		for _, c := range choices {
+			choice := Choice{}
+			if msg, ok := c["message"].(map[string]string); ok {
+				choice.Message = Message{Content: msg["content"]}
+			}
+			if logProbs, ok := c["logprobs"].(map[string]interface{}); ok {
+				if content, ok := logProbs["content"].([]map[string]interface{}); ok {
+					choice.LogProbs = &LogProbs{}
+					for _, token := range content {
+						if tok, ok := token["token"].(string); ok {
+							if logprob, ok := token["logprob"].(float64); ok {
+								choice.LogProbs.Content = append(choice.LogProbs.Content, TokenLogProb{
+									Token:   tok,
+									LogProb: logprob,
+								})
+							}
+						}
+					}
+				}
+			}
+			resp.Choices = append(resp.Choices, choice)
+		}
+	}
+	return resp, nil
 }
 
 func TestNewSpeculativeDecoder(t *testing.T) {
@@ -31,38 +70,44 @@ func TestNewSpeculativeDecoder(t *testing.T) {
 }
 
 func TestDraftTokens(t *testing.T) {
-	client := new(MockAPIClient)
-	client.On("ChatCompletion", mock.Anything).Return(&ChatResponse{
-		Choices: []Choice{
-			{Message: Message{Content: "token1 token2 token3"}},
+	client := &MockAPIClient{
+		Responses: []map[string]interface{}{
+			{
+				"choices": []map[string]interface{}{
+					{
+						"message": map[string]string{"content": "token1 token2 token3"},
+					},
+				},
+			},
 		},
-	}, nil)
+	}
 	
 	decoder := NewSpeculativeDecoder(client, "deepseek-v4-flash", "deepseek-v4-pro", 3)
 	tokens, err := decoder.Draft("test prompt")
 	
 	assert.NoError(t, err)
 	assert.Len(t, tokens, 3)
-	client.AssertExpectations(t)
 }
 
 func TestVerifyTokensAllAccepted(t *testing.T) {
-	client := new(MockAPIClient)
-	// Target model accepts all draft tokens
-	client.On("ChatCompletion", mock.Anything).Return(&ChatResponse{
-		Choices: []Choice{
+	client := &MockAPIClient{
+		Responses: []map[string]interface{}{
 			{
-				Message: Message{Content: "token1 token2 token3"},
-				LogProbs: &LogProbs{
-					Content: []TokenLogProb{
-						{Token: "token1", LogProb: -0.1},
-						{Token: "token2", LogProb: -0.2},
-						{Token: "token3", LogProb: -0.15},
+				"choices": []map[string]interface{}{
+					{
+						"message": map[string]string{"content": "token1 token2 token3"},
+						"logprobs": map[string]interface{}{
+							"content": []map[string]interface{}{
+								{"token": "token1", "logprob": -0.1},
+								{"token": "token2", "logprob": -0.2},
+								{"token": "token3", "logprob": -0.15},
+							},
+						},
 					},
 				},
 			},
 		},
-	}, nil)
+	}
 	
 	decoder := NewSpeculativeDecoder(client, "deepseek-v4-flash", "deepseek-v4-pro", 3)
 	draftTokens := []string{"token1", "token2", "token3"}
@@ -73,21 +118,23 @@ func TestVerifyTokensAllAccepted(t *testing.T) {
 }
 
 func TestVerifyTokensPartialAccept(t *testing.T) {
-	client := new(MockAPIClient)
-	// Target model only accepts first 2 tokens
-	client.On("ChatCompletion", mock.Anything).Return(&ChatResponse{
-		Choices: []Choice{
+	client := &MockAPIClient{
+		Responses: []map[string]interface{}{
 			{
-				Message: Message{Content: "token1 token2"},
-				LogProbs: &LogProbs{
-					Content: []TokenLogProb{
-						{Token: "token1", LogProb: -0.1},
-						{Token: "token2", LogProb: -0.2},
+				"choices": []map[string]interface{}{
+					{
+						"message": map[string]string{"content": "token1 token2"},
+						"logprobs": map[string]interface{}{
+							"content": []map[string]interface{}{
+								{"token": "token1", "logprob": -0.1},
+								{"token": "token2", "logprob": -0.2},
+							},
+						},
 					},
 				},
 			},
 		},
-	}, nil)
+	}
 	
 	decoder := NewSpeculativeDecoder(client, "deepseek-v4-flash", "deepseek-v4-pro", 3)
 	draftTokens := []string{"token1", "token2", "token3"}
@@ -98,42 +145,38 @@ func TestVerifyTokensPartialAccept(t *testing.T) {
 }
 
 func TestSpeculativeDecodingFlow(t *testing.T) {
-	client := new(MockAPIClient)
-	
-	// First call: draft model generates tokens
-	client.On("ChatCompletion", mock.MatchedBy(func(req interface{}) bool {
-		return true // Accept any request for simplicity
-	})).Return(&ChatResponse{
-		Choices: []Choice{
-			{Message: Message{Content: "hello world foo"}},
-		},
-	}, nil).Once()
-	
-	// Second call: target model verifies
-	client.On("ChatCompletion", mock.Anything).Return(&ChatResponse{
-		Choices: []Choice{
+	client := &MockAPIClient{
+		Responses: []map[string]interface{}{
 			{
-				Message: Message{Content: "hello world"},
-				LogProbs: &LogProbs{
-					Content: []TokenLogProb{
-						{Token: "hello", LogProb: -0.1},
-						{Token: "world", LogProb: -0.15},
+				"choices": []map[string]interface{}{
+					{"message": map[string]string{"content": "hello world foo"}},
+				},
+			},
+			{
+				"choices": []map[string]interface{}{
+					{
+						"message": map[string]string{"content": "hello world foo bar"},
+						"logprobs": map[string]interface{}{
+							"content": []map[string]interface{}{
+								{"token": "hello", "logprob": -0.1},
+								{"token": "world", "logprob": -0.2},
+								{"token": "foo", "logprob": -0.15},
+							},
+						},
 					},
 				},
 			},
 		},
-	}, nil).Once()
+	}
 	
-	decoder := NewSpeculativeDecoder(client, "deepseek-v4-flash", "deepseek-v4-pro", 3)
+	decoder := NewSpeculativeDecoder(client, "deepseek-v4-flash", "deepseek-v4-pro", 5)
 	result, err := decoder.Decode("test prompt")
-	
 	assert.NoError(t, err)
 	assert.NotEmpty(t, result)
-	client.AssertExpectations(t)
 }
 
 func TestKVReuse(t *testing.T) {
-	client := new(MockAPIClient)
+	client := &MockAPIClient{}
 	decoder := NewSpeculativeDecoder(client, "deepseek-v4-flash", "deepseek-v4-pro", 3)
 	
 	// Enable context caching
@@ -146,7 +189,7 @@ func TestKVReuse(t *testing.T) {
 }
 
 func TestConfigFlags(t *testing.T) {
-	client := new(MockAPIClient)
+	client := &MockAPIClient{}
 	decoder := NewSpeculativeDecoder(client, "deepseek-v4-flash", "deepseek-v4-pro", 5)
 	
 	// Test default values
@@ -159,12 +202,15 @@ func TestConfigFlags(t *testing.T) {
 }
 
 func TestEmptyDraft(t *testing.T) {
-	client := new(MockAPIClient)
-	client.On("ChatCompletion", mock.Anything).Return(&ChatResponse{
-		Choices: []Choice{
-			{Message: Message{Content: ""}},
+	client := &MockAPIClient{
+		Responses: []map[string]interface{}{
+			{
+				"choices": []map[string]interface{}{
+					{"message": map[string]string{"content": ""}},
+				},
+			},
 		},
-	}, nil)
+	}
 	
 	decoder := NewSpeculativeDecoder(client, "deepseek-v4-flash", "deepseek-v4-pro", 3)
 	tokens, err := decoder.Draft("test prompt")
@@ -174,8 +220,9 @@ func TestEmptyDraft(t *testing.T) {
 }
 
 func TestAPIError(t *testing.T) {
-	client := new(MockAPIClient)
-	client.On("ChatCompletion", mock.Anything).Return(nil, assert.AnError)
+	client := &MockAPIClient{
+		Err: fmt.Errorf("API error"),
+	}
 	
 	decoder := NewSpeculativeDecoder(client, "deepseek-v4-flash", "deepseek-v4-pro", 3)
 	_, err := decoder.Draft("test prompt")

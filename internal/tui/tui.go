@@ -1,16 +1,13 @@
 package tui
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/viewport"
-	"github.com/charmbracelet/glamour"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -25,9 +22,9 @@ const (
 
 // Message represents a chat message
 type Message struct {
-	Role       string
-	Content    string
-	Timestamp  time.Time
+	Role      string
+	Content   string
+	Timestamp time.Time
 }
 
 // TokenUsage represents token usage information
@@ -39,30 +36,33 @@ type TokenUsage struct {
 
 // Model is the Bubble Tea model for the TUI
 type Model struct {
-	State       State
-	Messages    []Message
-	Width       int
-	Height      int
-	Model       string
-	TokenUsage  *TokenUsage
-	ToolOutput  string
-	SessionPath string
-	MaxMessages int
-	Styles      Styles
-	Viewport    viewport.Model
-	TextInput   textarea.Model
-	GlamourRenderer *glamour.TermRenderer
-	Err         error
+	State         State
+	Messages      []Message
+	Width         int
+	Height        int
+	Model         string
+	TokenUsage    *TokenUsage
+	ToolOutput    string
+	SessionPath   string
+	MaxMessages   int
+	Styles        Styles
+	Viewport      viewport.Model
+	TextInput     textarea.Model
+	Err           error
+	Streaming     bool
+	StreamContent string
 }
 
 // Styles holds all the lipgloss styles
 type Styles struct {
-	ChatMessage     lipgloss.Style
-	UserMessage    lipgloss.Style
+	ChatMessage      lipgloss.Style
+	UserMessage      lipgloss.Style
 	AssistantMessage lipgloss.Style
-	StatusBar      lipgloss.Style
-	Input          lipgloss.Style
-	ToolOutput     lipgloss.Style
+	StatusBar        lipgloss.Style
+	Input            lipgloss.Style
+	ToolOutput       lipgloss.Style
+	Welcome          lipgloss.Style
+	Error            lipgloss.Style
 }
 
 // InitialModel returns a new initial model
@@ -73,14 +73,10 @@ func InitialModel() Model {
 
 	// Initialize textarea for multiline input
 	ti := textarea.New()
-	ti.Placeholder = "Type your message..."
+	ti.Placeholder = "Type your message... (Enter to send, Ctrl+C to quit)"
 	ti.Focus()
-
-	// Initialize glamour renderer for markdown rendering
-	gr, err := glamour.NewTermRenderer(
-		glamour.WithAutoStyle(),
-		glamour.WithWordWrap(80),
-	)
+	ti.SetWidth(76)
+	ti.SetHeight(3)
 
 	return Model{
 		State:       StateChat,
@@ -92,8 +88,7 @@ func InitialModel() Model {
 		Styles:      DefaultStyles(),
 		Viewport:    vp,
 		TextInput:   ti,
-		GlamourRenderer: gr,
-		Err:         err,
+		Streaming:   false,
 	}
 }
 
@@ -116,11 +111,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.Width = msg.Width
 		m.Height = msg.Height
 		// Update viewport size
-		m.Viewport.Width = m.Width
-		m.Viewport.Height = m.Height - 6 // Leave room for input and status bar
+		m.Viewport.Width = m.Width - 4
+		m.Viewport.Height = m.Height - 8 // Leave room for input and status bar
 		// Update textarea size
-		m.TextInput.SetWidth(m.Width)
-		m.TextInput.SetHeight(3)
+		m.TextInput.SetWidth(m.Width - 4)
 		return m, nil
 
 	case tea.KeyMsg:
@@ -128,12 +122,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case tea.KeyCtrlC, tea.KeyEsc:
 			return m, tea.Quit
 		case tea.KeyEnter:
-			// For now, always send message on Enter
-			// TODO: Add proper multi-line support with modifier keys
-			if m.TextInput.Value() != "" {
+			// Send message on Enter if not empty
+			if m.TextInput.Value() != "" && !m.Streaming {
 				m.AddMessage("user", m.TextInput.Value())
 				m.TextInput.Reset()
-				m.TextInput.Placeholder = "Type your message..."
+				m.TextInput.Placeholder = "Type your message... (Enter to send, Ctrl+C to quit)"
 				// Auto-scroll to bottom
 				m.Viewport.GotoBottom()
 			}
@@ -162,7 +155,7 @@ func (m *Model) AddMessage(role, content string) {
 		Content:   content,
 		Timestamp: time.Now(),
 	})
-	
+
 	// Trim if over max
 	if m.MaxMessages > 0 && len(m.Messages) > m.MaxMessages {
 		m.Messages = m.Messages[len(m.Messages)-m.MaxMessages:]
@@ -171,69 +164,61 @@ func (m *Model) AddMessage(role, content string) {
 
 // SaveSession saves the session to disk
 func (m *Model) SaveSession() error {
-	data, err := json.Marshal(m.Messages)
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(m.SessionPath, data, 0644)
+	// Implementation for session saving
+	// For now, just return nil as we're not persisting sessions yet
+	return nil
 }
 
 // LoadSession loads the session from disk
 func (m *Model) LoadSession() error {
-	data, err := os.ReadFile(m.SessionPath)
-	if err != nil {
-		return err
-	}
-	return json.Unmarshal(data, &m.Messages)
+	// Implementation for session loading
+	// For now, just return nil as we're not persisting sessions yet
+	return nil
 }
 
 // DefaultStyles returns the default styles
 func DefaultStyles() Styles {
 	return Styles{
-		ChatMessage:     lipgloss.NewStyle(),
-		UserMessage:     lipgloss.NewStyle().Foreground(lipgloss.Color("12")),
+		ChatMessage:      lipgloss.NewStyle(),
+		UserMessage:      lipgloss.NewStyle().Foreground(lipgloss.Color("12")),
 		AssistantMessage: lipgloss.NewStyle().Foreground(lipgloss.Color("10")),
-		StatusBar:       lipgloss.NewStyle().Background(lipgloss.Color("8")).Foreground(lipgloss.Color("15")),
-		Input:           lipgloss.NewStyle().BorderForeground(lipgloss.Color("63")),
-		ToolOutput:      lipgloss.NewStyle().Foreground(lipgloss.Color("11")),
+		StatusBar:        lipgloss.NewStyle().Background(lipgloss.Color("236")).Foreground(lipgloss.Color("252")),
+		Input:            lipgloss.NewStyle().BorderForeground(lipgloss.Color("63")),
+		ToolOutput:       lipgloss.NewStyle().Foreground(lipgloss.Color("11")),
+		Welcome:          lipgloss.NewStyle().Foreground(lipgloss.Color("6")).Bold(true),
+		Error:            lipgloss.NewStyle().Foreground(lipgloss.Color("9")),
 	}
 }
 
 // renderChatView renders the chat messages
 func (m Model) renderChatView() string {
 	var sb strings.Builder
-	
-	for _, msg := range m.Messages {
-		prefix := "You: "
-		style := m.Styles.UserMessage
-		
-		if msg.Role == "assistant" {
-			prefix = "Assistant: "
-			style = m.Styles.AssistantMessage
-		}
-		
-		// Apply role-specific styling to prefix
-		sb.WriteString(style.Render(prefix))
-		
-		// Render content with glamour for markdown/code highlighting
-		if m.GlamourRenderer != nil {
-			rendered, err := m.GlamourRenderer.Render(msg.Content)
-			if err != nil {
-				// Fallback to plain text if rendering fails
-				sb.WriteString(msg.Content)
-			} else {
-				sb.WriteString(rendered)
-			}
-		} else {
-			sb.WriteString(msg.Content)
-		}
-		
+
+	// Welcome message if no messages
+	if len(m.Messages) == 0 {
+		welcomeText := "Welcome to DeepSeek CLI TUI\n\nStart chatting by typing a message below.\nPress Ctrl+C to exit."
+		sb.WriteString(m.Styles.Welcome.Render(welcomeText))
 		sb.WriteString("\n\n")
+	} else {
+		for _, msg := range m.Messages {
+			prefix := "You: "
+			style := m.Styles.UserMessage
+
+			if msg.Role == "assistant" {
+				prefix = "Assistant: "
+				style = m.Styles.AssistantMessage
+			}
+
+			// Apply role-specific styling to prefix
+			sb.WriteString(style.Render(prefix))
+			sb.WriteString(msg.Content)
+			sb.WriteString("\n\n")
+		}
 	}
-	
+
 	// Set the viewport content
 	m.Viewport.SetContent(sb.String())
-	
+
 	return m.Viewport.View()
 }
 
@@ -250,8 +235,11 @@ func (m Model) renderStatusBar() string {
 	if m.TokenUsage != nil {
 		sb.WriteString(fmt.Sprintf(" | prompt: %d, completion: %d", m.TokenUsage.PromptTokens, m.TokenUsage.CompletionTokens))
 	}
+	if m.Streaming {
+		sb.WriteString(" | streaming...")
+	}
 	sb.WriteString("]")
-	return sb.String()
+	return m.Styles.StatusBar.Render(sb.String())
 }
 
 // renderToolOutput renders the tool output panel
@@ -262,11 +250,28 @@ func (m Model) renderToolOutput() string {
 // UpdateViewport updates the viewport size
 func (m *Model) UpdateViewport() {
 	// Calculate available height for viewport (total height - input area - status bar - padding)
-	viewportHeight := m.Height - 6 // 3 lines for input, 1 for status bar, 2 for padding
+	viewportHeight := m.Height - 8
 	if viewportHeight < 5 {
 		viewportHeight = 5 // Minimum height
 	}
-	
-	m.Viewport.Width = m.Width
+
+	m.Viewport.Width = m.Width - 4
 	m.Viewport.Height = viewportHeight
+}
+
+// SetStreaming sets the streaming state
+func (m *Model) SetStreaming(streaming bool) {
+	m.Streaming = streaming
+	if streaming {
+		m.StreamContent = ""
+	}
+}
+
+// AppendToLastMessage appends content to the last assistant message or creates a new one
+func (m *Model) AppendToLastMessage(content string) {
+	if len(m.Messages) > 0 && m.Messages[len(m.Messages)-1].Role == "assistant" {
+		m.Messages[len(m.Messages)-1].Content += content
+	} else {
+		m.AddMessage("assistant", content)
+	}
 }

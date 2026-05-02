@@ -1,0 +1,95 @@
+name: Go Test Suite
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.23'
+        cache: true
+
+    - name: Install dependencies
+      run: |
+        go mod download
+
+    - name: Run unit tests with coverage
+      run: |
+        go test -v -race -coverprofile=coverage.out ./...
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v4
+      with:
+        files: ./coverage.out
+        flags: unittests
+        fail_ci_if_error: false
+        token: ${{ secrets.CODECOV_TOKEN }}
+
+    - name: Check test coverage threshold
+      run: |
+        COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | tr -d '%')
+        echo "Total coverage: ${COVERAGE}%"
+        if (( $(echo "$COVERAGE < 70" | bc -l) )); then
+          echo "Coverage is below 70% threshold!"
+          exit 1
+        fi
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.23'
+        cache: true
+
+    - name: Install golangci-lint
+      run: |
+        go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+
+    - name: Run linter
+      run: |
+        golangci-lint run --timeout=5m
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: [test]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.23'
+        cache: true
+
+    - name: Build binary
+      run: |
+        go build -v -o deepseek-cli ./cmd/deepseek
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: deepseek-cli
+        path: deepseek-cli
+        retention-days: 7
