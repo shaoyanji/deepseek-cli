@@ -42,14 +42,14 @@ func TestMustGetString(t *testing.T) {
 	cmd.Flags().String("test-flag", "default", "test flag")
 
 	// Test default value
-	cmd.ParseFlags([]string{})
+	_ = cmd.ParseFlags([]string{})
 	result := mustGetString(cmd, "test-flag")
 	if result != "default" {
 		t.Errorf("mustGetString() = %q, want %q", result, "default")
 	}
 
 	// Test set value
-	cmd.ParseFlags([]string{"--test-flag", "custom"})
+	_ = cmd.ParseFlags([]string{"--test-flag", "custom"})
 	result = mustGetString(cmd, "test-flag")
 	if result != "custom" {
 		t.Errorf("mustGetString() = %q, want %q", result, "custom")
@@ -61,14 +61,14 @@ func TestMustGetBool(t *testing.T) {
 	cmd.Flags().Bool("test-bool", false, "test bool flag")
 
 	// Test default value
-	cmd.ParseFlags([]string{})
+	_ = cmd.ParseFlags([]string{})
 	result := mustGetBool(cmd, "test-bool")
 	if result != false {
 		t.Errorf("mustGetBool() = %v, want false", result)
 	}
 
 	// Test set to true
-	cmd.ParseFlags([]string{"--test-bool"})
+	_ = cmd.ParseFlags([]string{"--test-bool"})
 	result = mustGetBool(cmd, "test-bool")
 	if result != true {
 		t.Errorf("mustGetBool() = %v, want true", result)
@@ -80,14 +80,14 @@ func TestMustGetInt(t *testing.T) {
 	cmd.Flags().Int("test-int", 0, "test int flag")
 
 	// Test default value
-	cmd.ParseFlags([]string{})
+	_ = cmd.ParseFlags([]string{})
 	result := mustGetInt(cmd, "test-int")
 	if result != 0 {
 		t.Errorf("mustGetInt() = %d, want 0", result)
 	}
 
 	// Test set value
-	cmd.ParseFlags([]string{"--test-int", "42"})
+	_ = cmd.ParseFlags([]string{"--test-int", "42"})
 	result = mustGetInt(cmd, "test-int")
 	if result != 42 {
 		t.Errorf("mustGetInt() = %d, want 42", result)
@@ -99,14 +99,14 @@ func TestMustGetFloat64(t *testing.T) {
 	cmd.Flags().Float64("test-float", 1.0, "test float flag")
 
 	// Test default value
-	cmd.ParseFlags([]string{})
+	_ = cmd.ParseFlags([]string{})
 	result := mustGetFloat64(cmd, "test-float")
 	if result != 1.0 {
 		t.Errorf("mustGetFloat64() = %f, want 1.0", result)
 	}
 
 	// Test set value
-	cmd.ParseFlags([]string{"--test-float", "0.5"})
+	_ = cmd.ParseFlags([]string{"--test-float", "0.5"})
 	result = mustGetFloat64(cmd, "test-float")
 	if result != 0.5 {
 		t.Errorf("mustGetFloat64() = %f, want 0.5", result)
@@ -118,14 +118,14 @@ func TestMustGetStringSlice(t *testing.T) {
 	cmd.Flags().StringSlice("test-slice", []string{}, "test slice flag")
 
 	// Test default value
-	cmd.ParseFlags([]string{})
+	_ = cmd.ParseFlags([]string{})
 	result := mustGetStringSlice(cmd, "test-slice")
 	if len(result) != 0 {
 		t.Errorf("mustGetStringSlice() length = %d, want 0", len(result))
 	}
 
 	// Test set value
-	cmd.ParseFlags([]string{"--test-slice", "a,b,c"})
+	_ = cmd.ParseFlags([]string{"--test-slice", "a,b,c"})
 	result = mustGetStringSlice(cmd, "test-slice")
 	if len(result) != 3 || result[0] != "a" || result[2] != "c" {
 		t.Errorf("mustGetStringSlice() = %v, want [a b c]", result)
@@ -168,7 +168,7 @@ func TestBuildChatRequest(t *testing.T) {
 	cmd1.Flags().Int("top-logprobs", 0, "")
 	cmd1.Flags().Bool("prefix-completion", false, "")
 	
-	cmd1.ParseFlags([]string{"--user", "Hello"})
+	_ = cmd1.ParseFlags([]string{"--user", "Hello"})
 	req, err := buildChatRequest(cmd1)
 	if err != nil {
 		t.Fatalf("buildChatRequest() error = %v", err)
@@ -200,7 +200,7 @@ func TestBuildChatRequest(t *testing.T) {
 	cmd2.Flags().Int("top-logprobs", 0, "")
 	cmd2.Flags().Bool("prefix-completion", false, "")
 	
-	cmd2.ParseFlags([]string{"--system", "You are helpful", "--user", "Hi"})
+	_ = cmd2.ParseFlags([]string{"--system", "You are helpful", "--user", "Hi"})
 	req, err = buildChatRequest(cmd2)
 	if err != nil {
 		t.Fatalf("buildChatRequest() error = %v", err)
@@ -232,7 +232,7 @@ func TestBuildChatRequest(t *testing.T) {
 	cmd3.Flags().Int("top-logprobs", 0, "")
 	cmd3.Flags().Bool("prefix-completion", false, "")
 	
-	cmd3.ParseFlags([]string{"--user", "test", "--temperature", "0.5"})
+	_ = cmd3.ParseFlags([]string{"--user", "test", "--temperature", "0.5"})
 	req, err = buildChatRequest(cmd3)
 	if err != nil {
 		t.Fatalf("buildChatRequest() error = %v", err)
@@ -264,7 +264,7 @@ func TestBuildChatRequest(t *testing.T) {
 	cmd4.Flags().Int("top-logprobs", 0, "")
 	cmd4.Flags().Bool("prefix-completion", false, "")
 	
-	cmd4.ParseFlags([]string{"--user", "test", "--json-mode"})
+	_ = cmd4.ParseFlags([]string{"--user", "test", "--json-mode"})
 	req, err = buildChatRequest(cmd4)
 	if err != nil {
 		t.Fatalf("buildChatRequest() error = %v", err)
@@ -296,7 +296,7 @@ func TestBuildChatRequest(t *testing.T) {
 	cmd5.Flags().Int("top-logprobs", 0, "")
 	cmd5.Flags().Bool("prefix-completion", false, "")
 	
-	cmd5.ParseFlags([]string{})
+	_ = cmd5.ParseFlags([]string{})
 	_, err = buildChatRequest(cmd5)
 	if err == nil {
 		t.Error("buildChatRequest() should error with no messages")
@@ -320,7 +320,7 @@ func TestBuildFIMRequest(t *testing.T) {
 	cmd1.Flags().Bool("include-usage", false, "")
 	cmd1.Flags().Int("logprobs", 0, "")
 
-	cmd1.ParseFlags([]string{"--prompt", "func main() {"})
+	_ = cmd1.ParseFlags([]string{"--prompt", "func main() {"})
 	req, err := buildFIMRequest(cmd1)
 	if err != nil {
 		t.Fatalf("buildFIMRequest() error = %v", err)
@@ -345,7 +345,7 @@ func TestBuildFIMRequest(t *testing.T) {
 	cmd2.Flags().Bool("include-usage", false, "")
 	cmd2.Flags().Int("logprobs", 0, "")
 
-	cmd2.ParseFlags([]string{"--prompt", "func main() {", "--suffix", "}"})
+	_ = cmd2.ParseFlags([]string{"--prompt", "func main() {", "--suffix", "}"})
 	req, err = buildFIMRequest(cmd2)
 	if err != nil {
 		t.Fatalf("buildFIMRequest() error = %v", err)
@@ -370,7 +370,7 @@ func TestBuildFIMRequest(t *testing.T) {
 	cmd3.Flags().Bool("include-usage", false, "")
 	cmd3.Flags().Int("logprobs", 0, "")
 
-	cmd3.ParseFlags([]string{})
+	_ = cmd3.ParseFlags([]string{})
 	_, err = buildFIMRequest(cmd3)
 	if err == nil {
 		t.Error("buildFIMRequest() should error with no prompt")
@@ -387,7 +387,7 @@ func TestHasStdinData(t *testing.T) {
 	os.Stdin = r
 	
 	go func() {
-		w.WriteString("test input")
+		_, _ = w.WriteString("test input")
 		w.Close()
 	}()
 
@@ -445,7 +445,7 @@ func TestBuildChatRequest_WithTools(t *testing.T) {
 	cmd.Flags().Bool("prefix-completion", false, "")
 
 	toolsJSON := `[{"type":"function","function":{"name":"get_weather","parameters":{"type":"object"}}}]`
-	cmd.ParseFlags([]string{"--user", "weather", "--tools", toolsJSON})
+	_ = cmd.ParseFlags([]string{"--user", "weather", "--tools", toolsJSON})
 	req, err := buildChatRequest(cmd)
 	if err != nil {
 		t.Fatalf("buildChatRequest() with tools error = %v", err)
@@ -481,7 +481,7 @@ func TestBuildChatRequest_WithToolChoice(t *testing.T) {
 	cmd.Flags().Bool("prefix-completion", false, "")
 
 	// Test "none" tool choice
-	cmd.ParseFlags([]string{"--user", "test", "--tool-choice", "none"})
+	_ = cmd.ParseFlags([]string{"--user", "test", "--tool-choice", "none"})
 	req, err := buildChatRequest(cmd)
 	if err != nil {
 		t.Fatalf("buildChatRequest() error = %v", err)
@@ -491,7 +491,7 @@ func TestBuildChatRequest_WithToolChoice(t *testing.T) {
 	}
 
 	// Test JSON tool choice
-	cmd.ParseFlags([]string{"--user", "test", "--tool-choice", `{"type":"function","function":{"name":"get_weather"}}`})
+	_ = cmd.ParseFlags([]string{"--user", "test", "--tool-choice", `{"type":"function","function":{"name":"get_weather"}}`})
 	req, err = buildChatRequest(cmd)
 	if err != nil {
 		t.Fatalf("buildChatRequest() with JSON tool-choice error = %v", err)
@@ -526,7 +526,7 @@ func TestBuildChatRequest_WithLogprobs(t *testing.T) {
 	cmd.Flags().Int("top-logprobs", 0, "")
 	cmd.Flags().Bool("prefix-completion", false, "")
 
-	cmd.ParseFlags([]string{"--user", "test", "--logprobs", "--top-logprobs", "5"})
+	_ = cmd.ParseFlags([]string{"--user", "test", "--logprobs", "--top-logprobs", "5"})
 	req, err := buildChatRequest(cmd)
 	if err != nil {
 		t.Fatalf("buildChatRequest() error = %v", err)
@@ -565,7 +565,7 @@ func TestBuildChatRequest_WithStopSequences(t *testing.T) {
 	cmd.Flags().Bool("prefix-completion", false, "")
 
 	// Test single stop sequence
-	cmd.ParseFlags([]string{"--user", "test", "--stop", "STOP"})
+	_ = cmd.ParseFlags([]string{"--user", "test", "--stop", "STOP"})
 	req, err := buildChatRequest(cmd)
 	if err != nil {
 		t.Fatalf("buildChatRequest() error = %v", err)
@@ -591,7 +591,7 @@ func TestBuildFIMRequest_WithLogprobs(t *testing.T) {
 	cmd.Flags().Bool("include-usage", false, "")
 	cmd.Flags().Int("logprobs", 0, "")
 
-	cmd.ParseFlags([]string{"--prompt", "test", "--logprobs", "5"})
+	_ = cmd.ParseFlags([]string{"--prompt", "test", "--logprobs", "5"})
 	req, err := buildFIMRequest(cmd)
 	if err != nil {
 		t.Fatalf("buildFIMRequest() error = %v", err)
@@ -617,7 +617,7 @@ func TestBuildFIMRequest_WithStreamAndUsage(t *testing.T) {
 	cmd.Flags().Bool("include-usage", false, "")
 	cmd.Flags().Int("logprobs", 0, "")
 
-	cmd.ParseFlags([]string{"--prompt", "test", "--stream", "--include-usage"})
+	_ = cmd.ParseFlags([]string{"--prompt", "test", "--stream", "--include-usage"})
 	req, err := buildFIMRequest(cmd)
 	if err != nil {
 		t.Fatalf("buildFIMRequest() error = %v", err)
@@ -646,7 +646,7 @@ func TestBuildFIMRequest_WithStopSequences(t *testing.T) {
 	cmd.Flags().Bool("include-usage", false, "")
 	cmd.Flags().Int("logprobs", 0, "")
 
-	cmd.ParseFlags([]string{"--prompt", "test", "--stop", "STOP"})
+	_ = cmd.ParseFlags([]string{"--prompt", "test", "--stop", "STOP"})
 	req, err := buildFIMRequest(cmd)
 	if err != nil {
 		t.Fatalf("buildFIMRequest() error = %v", err)
@@ -672,7 +672,7 @@ func TestBuildFIMRequest_WithPenalties(t *testing.T) {
 	cmd.Flags().Bool("include-usage", false, "")
 	cmd.Flags().Int("logprobs", 0, "")
 
-	cmd.ParseFlags([]string{"--prompt", "test", "--frequency-penalty", "1.0", "--presence-penalty", "-0.5"})
+	_ = cmd.ParseFlags([]string{"--prompt", "test", "--frequency-penalty", "1.0", "--presence-penalty", "-0.5"})
 	req, err := buildFIMRequest(cmd)
 	if err != nil {
 		t.Fatalf("buildFIMRequest() error = %v", err)
@@ -702,7 +702,7 @@ func TestBuildFIMRequest_WithTemperatureAndTopP(t *testing.T) {
 	cmd.Flags().Int("logprobs", 0, "")
 
 	// Test with non-default temperature
-	cmd.ParseFlags([]string{"--prompt", "test", "--temperature", "0.5"})
+	_ = cmd.ParseFlags([]string{"--prompt", "test", "--temperature", "0.5"})
 	req, err := buildFIMRequest(cmd)
 	if err != nil {
 		t.Fatalf("buildFIMRequest() error = %v", err)
@@ -712,7 +712,7 @@ func TestBuildFIMRequest_WithTemperatureAndTopP(t *testing.T) {
 	}
 
 	// Test with non-default top-p
-	cmd.ParseFlags([]string{"--prompt", "test", "--top-p", "0.8"})
+	_ = cmd.ParseFlags([]string{"--prompt", "test", "--top-p", "0.8"})
 	req, err = buildFIMRequest(cmd)
 	if err != nil {
 		t.Fatalf("buildFIMRequest() error = %v", err)
@@ -747,7 +747,7 @@ func TestBuildChatRequest_WithAssistantMessage(t *testing.T) {
 	cmd.Flags().Int("top-logprobs", 0, "")
 	cmd.Flags().Bool("prefix-completion", false, "")
 
-	cmd.ParseFlags([]string{"--assistant", "previous", "--prefix-completion"})
+	_ = cmd.ParseFlags([]string{"--assistant", "previous", "--prefix-completion"})
 	req, err := buildChatRequest(cmd)
 	if err != nil {
 		t.Fatalf("buildChatRequest() error = %v", err)
@@ -785,7 +785,7 @@ func TestBuildChatRequest_WithStreamAndUsage(t *testing.T) {
 	cmd.Flags().Int("top-logprobs", 0, "")
 	cmd.Flags().Bool("prefix-completion", false, "")
 
-	cmd.ParseFlags([]string{"--user", "test", "--stream", "--include-usage"})
+	_ = cmd.ParseFlags([]string{"--user", "test", "--stream", "--include-usage"})
 	req, err := buildChatRequest(cmd)
 	if err != nil {
 		t.Fatalf("buildChatRequest() error = %v", err)
@@ -823,7 +823,7 @@ func TestBuildChatRequest_WithPenalties(t *testing.T) {
 	cmd.Flags().Int("top-logprobs", 0, "")
 	cmd.Flags().Bool("prefix-completion", false, "")
 
-	cmd.ParseFlags([]string{"--user", "test", "--frequency-penalty", "1.5", "--presence-penalty", "-0.5"})
+	_ = cmd.ParseFlags([]string{"--user", "test", "--frequency-penalty", "1.5", "--presence-penalty", "-0.5"})
 	req, err := buildChatRequest(cmd)
 	if err != nil {
 		t.Fatalf("buildChatRequest() error = %v", err)
@@ -979,7 +979,7 @@ func TestExecuteHistoryMode_InvalidJSON(t *testing.T) {
 	}
 	defer os.Remove(tmpfile.Name())
 
-	tmpfile.WriteString("invalid json")
+	_, _ = tmpfile.WriteString("invalid json")
 	tmpfile.Close()
 
 	cmd := &cobra.Command{}
@@ -1018,7 +1018,7 @@ func TestBuildChatRequest_InvalidToolsJSON(t *testing.T) {
 	cmd.Flags().Int("top-logprobs", 0, "")
 	cmd.Flags().Bool("prefix-completion", false, "")
 
-	cmd.ParseFlags([]string{"--user", "test", "--tools", "invalid"})
+	_ = cmd.ParseFlags([]string{"--user", "test", "--tools", "invalid"})
 	_, err := buildChatRequest(cmd)
 	if err == nil {
 		t.Error("buildChatRequest() should error with invalid tools JSON")
@@ -1051,7 +1051,7 @@ func TestBuildChatRequest_InvalidToolChoiceJSON(t *testing.T) {
 	cmd.Flags().Bool("prefix-completion", false, "")
 
 	// Use invalid JSON that starts with { but is malformed
-	cmd.ParseFlags([]string{"--user", "test", "--tool-choice", `{"type":"function"`})
+	_ = cmd.ParseFlags([]string{"--user", "test", "--tool-choice", `{"type":"function"`})
 	_, err := buildChatRequest(cmd)
 	if err == nil {
 		t.Error("buildChatRequest() should error with invalid tool-choice JSON")
@@ -1072,7 +1072,7 @@ func TestExecuteChatCommand_WithMockClient(t *testing.T) {
 	cmd.Flags().Bool("beta", false, "beta flag")
 	cmd.Flags().String("base-url", "", "base url")
 	cmd.Flags().Bool("cache", false, "cache flag")
-	cmd.ParseFlags([]string{"--json", `{"model":"deepseek-v4-pro","messages":[{"role":"user","content":"hi"}]}`})
+	_ = cmd.ParseFlags([]string{"--json", `{"model":"deepseek-v4-pro","messages":[{"role":"user","content":"hi"}]}`})
 
 	err := executeChatCommand(cmd, mock)
 	if err != nil {
@@ -1111,7 +1111,7 @@ func TestExecuteChatCommand_NonJSON(t *testing.T) {
 	cmd.Flags().Bool("prefix-completion", false, "prefix")
 	cmd.Flags().Bool("beta", false, "beta")
 	cmd.Flags().String("base-url", "", "base")
-	cmd.ParseFlags([]string{"--user", "hello"})
+	_ = cmd.ParseFlags([]string{"--user", "hello"})
 
 	err := executeChatCommand(cmd, mock)
 	if err != nil {
@@ -1150,7 +1150,7 @@ func TestExecuteChatCommand_JSONMode(t *testing.T) {
 	cmd.Flags().Bool("prefix-completion", false, "prefix")
 	cmd.Flags().Bool("beta", false, "beta")
 	cmd.Flags().String("base-url", "", "base")
-	cmd.ParseFlags([]string{"--user", "hello", "--json-mode"})
+	_ = cmd.ParseFlags([]string{"--user", "hello", "--json-mode"})
 
 	err := executeChatCommand(cmd, mock)
 	if err != nil {
@@ -1171,7 +1171,7 @@ func TestExecuteFIMCommand_WithMockClient(t *testing.T) {
 	cmd.Flags().String("json", "", "JSON input")
 	cmd.Flags().Bool("beta", false, "beta flag")
 	cmd.Flags().String("base-url", "", "base url")
-	cmd.ParseFlags([]string{"--json", `{"model":"deepseek-v4-pro","prompt":"func main() {"}`})
+	_ = cmd.ParseFlags([]string{"--json", `{"model":"deepseek-v4-pro","prompt":"func main() {"}`})
 
 	err := executeFIMCommand(cmd, mock)
 	if err != nil {
@@ -1203,7 +1203,7 @@ func TestExecuteFIMCommand_NonJSON(t *testing.T) {
 	cmd.Flags().Int("logprobs", 0, "lp")
 	cmd.Flags().Bool("beta", false, "beta")
 	cmd.Flags().String("base-url", "", "base")
-	cmd.ParseFlags([]string{"--prompt", "test prompt"})
+	_ = cmd.ParseFlags([]string{"--prompt", "test prompt"})
 
 	err := executeFIMCommand(cmd, mock)
 	if err != nil {
@@ -1226,7 +1226,7 @@ func TestExecuteChatCommand_StreamingWithMockClient(t *testing.T) {
 	cmd.Flags().Bool("beta", false, "beta flag")
 	cmd.Flags().String("base-url", "", "base url")
 	cmd.Flags().Bool("cache", false, "cache flag")
-	cmd.ParseFlags([]string{"--json", `{"model":"deepseek-v4-pro","messages":[{"role":"user","content":"hi"}],"stream":true}`})
+	_ = cmd.ParseFlags([]string{"--json", `{"model":"deepseek-v4-pro","messages":[{"role":"user","content":"hi"}],"stream":true}`})
 
 	err := executeChatCommand(cmd, mock)
 	if err != nil {
@@ -1247,7 +1247,7 @@ func TestExecuteFIMCommand_StreamingWithMockClient(t *testing.T) {
 	cmd.Flags().String("json", "", "JSON input")
 	cmd.Flags().Bool("beta", false, "beta flag")
 	cmd.Flags().String("base-url", "", "base url")
-	cmd.ParseFlags([]string{"--json", `{"model":"deepseek-v4-pro","prompt":"func main() {"}`})
+	_ = cmd.ParseFlags([]string{"--json", `{"model":"deepseek-v4-pro","prompt":"func main() {"}`})
 
 	err := executeFIMCommand(cmd, mock)
 	if err != nil {
@@ -1315,7 +1315,7 @@ func TestExecuteChatCommand_NoClientNoAPIKey(t *testing.T) {
 	cmd.Flags().Bool("beta", false, "beta flag")
 	cmd.Flags().String("base-url", "", "base url")
 	cmd.Flags().Bool("cache", false, "cache flag")
-	cmd.ParseFlags([]string{"--json", `{"model":"deepseek-v4-pro","messages":[{"role":"user","content":"hi"}]}`})
+	_ = cmd.ParseFlags([]string{"--json", `{"model":"deepseek-v4-pro","messages":[{"role":"user","content":"hi"}]}`})
 
 	err := executeChatCommand(cmd, nil)
 	if err == nil {
@@ -1333,7 +1333,7 @@ func TestExecuteFIMCommand_NoClientNoAPIKey(t *testing.T) {
 	cmd.Flags().String("json", "", "JSON input")
 	cmd.Flags().Bool("beta", false, "beta flag")
 	cmd.Flags().String("base-url", "", "base url")
-	cmd.ParseFlags([]string{"--json", `{"model":"deepseek-v4-pro","prompt":"test"}`})
+	_ = cmd.ParseFlags([]string{"--json", `{"model":"deepseek-v4-pro","prompt":"test"}`})
 
 	err := executeFIMCommand(cmd, nil)
 	if err == nil {
@@ -1463,7 +1463,7 @@ func TestExecuteHistoryMode_WithMockClient(t *testing.T) {
 	defer os.Remove(tmpfile.Name())
 
 	history := `[{"role":"user","content":"test"}]`
-	tmpfile.WriteString(history)
+	_, _ = tmpfile.WriteString(history)
 	tmpfile.Close()
 
 	cmd := &cobra.Command{}
@@ -1494,7 +1494,7 @@ func TestExecuteStdinMode_WithMockClient(t *testing.T) {
 	os.Stdin = r
 
 	go func() {
-		w.WriteString("test input")
+		_, _ = w.WriteString("test input")
 		w.Close()
 	}()
 
@@ -1640,6 +1640,7 @@ func TestRun_WithHistory(t *testing.T) {
 	// Test with --history flag (calls handleHistoryMode)
 	os.Args = []string{"deepseek", "--history", "/nonexistent/file.json"}
 	// This will fail with file not found, but should cover the history path
+	// We expect this to fail, so just run it and ignore the result
 	_ = run()
 }
 
@@ -1657,7 +1658,7 @@ func TestRun_NoFlagsWithStdin(t *testing.T) {
 	os.Stdin = r
 
 	go func() {
-		w.WriteString("test input")
+		_, _ = w.WriteString("test input")
 		w.Close()
 	}()
 

@@ -37,7 +37,7 @@ func TestClientDo(t *testing.T) {
 		
 		// Return success response
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"result": "success"}`))
+		_, _ = w.Write([]byte(`{"result": "success"}`))
 	}))
 	defer server.Close()
 
@@ -59,7 +59,7 @@ func TestClientDoGET(t *testing.T) {
 		
 		// Return success response
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"models": ["model1", "model2"]}`))
+		_, _ = w.Write([]byte(`{"models": ["model1", "model2"]}`))
 	}))
 	defer server.Close()
 
@@ -76,7 +76,7 @@ func TestClientDoHTTPError(t *testing.T) {
 	// Create a mock HTTP server that returns an error
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
-		w.Write([]byte(`{"error": "invalid api key"}`))
+		_, _ = w.Write([]byte(`{"error": "invalid api key"}`))
 	}))
 	defer server.Close()
 
@@ -110,7 +110,7 @@ func TestClientDoWithNilBody(t *testing.T) {
 		assert.Equal(t, "", r.Header.Get("Content-Type"))
 		
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"result": "success"}`))
+		_, _ = w.Write([]byte(`{"result": "success"}`))
 	}))
 	defer server.Close()
 
@@ -128,7 +128,7 @@ func TestClientDoBaseURLTrailingSlash(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/test", r.URL.Path)
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"result": "success"}`))
+		_, _ = w.Write([]byte(`{"result": "success"}`))
 	}))
 	defer server.Close()
 

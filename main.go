@@ -48,17 +48,17 @@ func run() error {
 
 			if prompt != "" {
 				// Single-turn mode with prompt
-				handleSingleTurn(cmd, prompt, config)
+				_ = handleSingleTurn(cmd, prompt, config)
 			} else if history != "" {
 				// Multi-turn mode with history file
-				handleHistoryMode(cmd, history, config)
+				_ = handleHistoryMode(cmd, history, config)
 			} else {
 				// Check if stdin has data
 				if hasStdinData() {
-					handleStdinMode(cmd, config)
+					_ = handleStdinMode(cmd, config)
 				} else {
 					// Launch TUI by default
-					launchTUI(cmd, config)
+					_ = launchTUI(cmd, config)
 				}
 			}
 		},
@@ -664,7 +664,10 @@ func executeTUI(cmd *cobra.Command, config *Config) error {
 
 	// Load previous session if exists
 	if _, err := os.Stat(model.SessionPath); err == nil {
-		model.LoadSession()
+		if err := model.LoadSession(); err != nil {
+			// Non-fatal: just log and continue
+			fmt.Fprintf(os.Stderr, "Warning: failed to load session: %v\n", err)
+		}
 	}
 
 	// Start Bubble Tea program
