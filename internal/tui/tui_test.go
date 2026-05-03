@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/charmbracelet/bubbletea"
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 func TestInitialModel(t *testing.T) {
@@ -404,6 +404,151 @@ func TestSetMode(t *testing.T) {
 		if m.Mode != mode {
 			t.Errorf("SetMode(%q) = %q, want %q", mode, m.Mode, mode)
 		}
+	}
+}
+
+// TestSlashCommands tests slash command registration and execution
+func TestSlashCommands(t *testing.T) {
+	m := InitialModel()
+	
+	// Test that commands are registered
+	expectedCommands := []string{"agent", "yolo", "acme", "clear", "help", "exit", "save", "restore", "file", "shell", "web"}
+	for _, cmdName := range expectedCommands {
+		if _, exists := m.SlashCommands[cmdName]; !exists {
+			t.Errorf("Slash command /%s not registered", cmdName)
+		}
+	}
+}
+
+// TestExecuteSlashCommand tests slash command execution
+func TestExecuteSlashCommand(t *testing.T) {
+	m := InitialModel()
+	
+	tests := []struct {
+		input       string
+		expectQuit  bool
+		expectError bool
+	}{
+		{"/help", false, false},
+		{"/clear", false, false},
+		{"/agent", false, false},
+		{"/yolo", false, false},
+		{"/acme", false, false},
+		{"/exit", true, false},
+		{"/unknown", false, true},
+		{"/file", false, true}, // Missing path argument
+	}
+	
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			result, cmd := m.executeSlashCommand(tt.input)
+			
+			if tt.expectQuit && cmd == nil {
+				t.Error("Expected quit command but got nil")
+			}
+			if !tt.expectQuit && cmd != nil {
+				t.Error("Expected no quit command but got one")
+			}
+			if tt.expectError && result == "" {
+				t.Error("Expected error message but got empty result")
+			}
+		})
+	}
+}
+
+// TestKeyBindings tests key binding configuration
+func TestKeyBindings(t *testing.T) {
+	kb := DefaultKeyBindings()
+	
+	if kb.Send != tea.KeyEnter {
+		t.Errorf("Send = %v, want %v", kb.Send, tea.KeyEnter)
+	}
+	if kb.Cancel != tea.KeyCtrlC {
+		t.Errorf("Cancel = %v, want %v", kb.Cancel, tea.KeyCtrlC)
+	}
+	if kb.SaveSession != tea.KeyCtrlS {
+		t.Errorf("SaveSession = %v, want %v", kb.SaveSession, tea.KeyCtrlS)
+	}
+	if kb.ClearScreen != tea.KeyCtrlL {
+		t.Errorf("ClearScreen = %v, want %v", kb.ClearScreen, tea.KeyCtrlL)
+	}
+}
+
+// TestCommandHistory tests command history navigation
+func TestCommandHistory(t *testing.T) {
+	m := InitialModel()
+	
+	// Add some commands to history
+	m.CommandHistory = append(m.CommandHistory, "first command")
+	m.CommandHistory = append(m.CommandHistory, "second command")
+	m.CommandHistory = append(m.CommandHistory, "third command")
+	
+	// History index starts at -1 (no selection)
+	if m.HistoryIndex != -1 {
+		t.Errorf("Initial HistoryIndex = %d, want -1", m.HistoryIndex)
+	}
+}
+
+// TestStatusMessage tests status message functionality
+func TestStatusMessage(t *testing.T) {
+	m := InitialModel()
+	
+	// Initially should be empty
+	if m.getAndClearStatusMessage() != "" {
+		t.Error("Initial status message should be empty")
+	}
+	
+	// Set a status message
+	m.setStatusMessage("Test message")
+	
+	// Should return the message (first call returns it)
+	msg := m.StatusMessage
+	if msg != "Test message" {
+		t.Errorf("Status message = %q, want %q", msg, "Test message")
+	}
+	
+	// Clear manually for test
+	m.StatusMessage = ""
+	
+	// After clearing, should be empty again
+	if m.getAndClearStatusMessage() != "" {
+		t.Error("Status message should be empty after manual clear")
+	}
+}
+
+// TestSessionSaveLoad tests session persistence
+func TestSessionSaveLoadFull(t *testing.T) {
+	m := InitialModel()
+	tmpDir := t.TempDir()
+	m.SessionPath = tmpDir + "/test_session.json"
+	
+	// Add some messages
+	m.AddMessage("user", "Hello")
+	m.AddMessage("assistant", "Hi there!")
+	m.Mode = "yolo"
+	m.Model = "deepseek-v4-pro"
+	
+	// Save session
+	err := m.SaveSession()
+	if err != nil {
+		t.Fatalf("SaveSession failed: %v", err)
+	}
+	
+	// Load into new model
+	m2 := InitialModel()
+	m2.SessionPath = m.SessionPath
+	
+	err = m2.LoadSession()
+	if err != nil {
+		t.Fatalf("LoadSession failed: %v", err)
+	}
+	
+	// Verify loaded data
+	if len(m2.Messages) != 2 {
+		t.Errorf("Loaded %d messages, want 2", len(m2.Messages))
+	}
+	if m2.Mode != "yolo" {
+		t.Errorf("Loaded mode = %q, want yolo", m2.Mode)
 	}
 }
 
