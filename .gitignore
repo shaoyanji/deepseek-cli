@@ -1,1 +1,42 @@
-Nothing should be ignored since only Go source files (.go) were added without any build artifacts, dependencies, or temporary files.
+```
+# Go-specific ignores
+*.o
+*.a
+*.so
+*.dylib
+*.dll
+*.exe
+
+# Dependencies
+vendor/
+
+# Build artifacts
+bin/
+dist/
+build/
+target/
+
+# Test coverage
+.coverage
+coverage/
+htmlcov/
+
+# Environment
+.env
+.env.local
+.env.*
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*.tmp
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+```
