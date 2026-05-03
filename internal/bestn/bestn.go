@@ -19,6 +19,27 @@ type APIClientIface interface {
 	ChatCompletion(req interface{}) (interface{}, error)
 }
 
+// MockAPIClient is a mock implementation of APIClientIface for testing
+type MockAPIClient struct {
+	ResponseFunc func(req interface{}) (interface{}, error)
+}
+
+func (m *MockAPIClient) ChatCompletion(req interface{}) (interface{}, error) {
+	if m.ResponseFunc != nil {
+		return m.ResponseFunc(req)
+	}
+	// Default mock response
+	return map[string]interface{}{
+		"choices": []interface{}{
+			map[string]interface{}{
+				"message": map[string]interface{}{
+					"content": "mock response",
+				},
+			},
+		},
+	}, nil
+}
+
 // BestN implements the Best N evaluation logic
 type BestN struct {
 	Evaluator EvaluatorIface
