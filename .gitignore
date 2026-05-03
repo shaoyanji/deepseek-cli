@@ -1,29 +1,11 @@
 ```
-# Coverage reports
-coverage.html
-coverage.out
-
-# Binaries
-deepseek-cli
-
-# Go build artifacts
-*.o
-*.a
-*.so
-*.dylib
-*.dll
-*.exe
-
-# Test coverage
-coverage/
-htmlcov/
-.coverage
-
 # Dependencies
-vendor/
+.deepstate/
+.deepstate.*
 
-# Logs
+# Logs and temp files
 *.log
+*.tmp
 
 # Environment
 .env
@@ -33,26 +15,16 @@ vendor/
 # Editors
 .vscode/
 .idea/
-*.swp
-*.swo
 
-# OS
-.DS_Store
-Thumbs.db
-
-# Build
-bin/
-target/
+# Build artifacts
+*.o
+*.obj
+*.exe
+*.dll
+*.so
+*.a
+*.out
 dist/
 build/
-
-# Python (if any Python files exist in project)
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-.Python
-venv/
-.venv/
-.env
+target/
 ```

@@ -15,14 +15,14 @@ func (m *MockEvaluator) Evaluate(candidates []string, evalPrompt string) (*EvalR
 	return m.Result, m.Err
 }
 
-// MockAPIClient mocks the API client for testing
-type MockAPIClient struct {
+// MockAPIClientWithCallCount wraps MockAPIClient to track calls for testing
+type MockAPIClientWithCallCount struct {
 	Responses []map[string]interface{}
 	Err       error
 	CallCount int
 }
 
-func (m *MockAPIClient) ChatCompletion(req interface{}) (interface{}, error) {
+func (m *MockAPIClientWithCallCount) ChatCompletion(req interface{}) (interface{}, error) {
 	if m.Err != nil {
 		return nil, m.Err
 	}
@@ -36,7 +36,7 @@ func (m *MockAPIClient) ChatCompletion(req interface{}) (interface{}, error) {
 
 func TestNewBestN(t *testing.T) {
 	evaluator := &MockEvaluator{}
-	apiClient := &MockAPIClient{}
+	apiClient := &MockAPIClientWithCallCount{}
 	bestn := NewBestN(evaluator, apiClient, 5)
 
 	if bestn == nil {
@@ -55,16 +55,16 @@ func TestNewBestN(t *testing.T) {
 
 func TestGenerateCandidates(t *testing.T) {
 	tests := []struct {
-		name        string
-		n           int
-		apiClient   APIClientIface
-		wantErr     bool
-		wantCount   int
+		name      string
+		n         int
+		apiClient APIClientIface
+		wantErr   bool
+		wantCount int
 	}{
 		{
 			name: "generate 3 candidates",
 			n:    3,
-			apiClient: &MockAPIClient{
+			apiClient: &MockAPIClientWithCallCount{
 				Responses: []map[string]interface{}{
 					{"choices": []interface{}{map[string]interface{}{"message": map[string]interface{}{"content": "response1"}}}},
 					{"choices": []interface{}{map[string]interface{}{"message": map[string]interface{}{"content": "response2"}}}},
@@ -77,7 +77,7 @@ func TestGenerateCandidates(t *testing.T) {
 		{
 			name: "API error",
 			n:    2,
-			apiClient: &MockAPIClient{
+			apiClient: &MockAPIClientWithCallCount{
 				Err: errors.New("API error"),
 			},
 			wantErr:   true,
@@ -86,9 +86,9 @@ func TestGenerateCandidates(t *testing.T) {
 		{
 			name:      "nil API client",
 			n:         2,
-			apiClient:  nil,
-			wantErr:    true,
-			wantCount:  0,
+			apiClient: nil,
+			wantErr:   true,
+			wantCount: 0,
 		},
 	}
 
