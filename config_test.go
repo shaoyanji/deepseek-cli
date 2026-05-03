@@ -32,13 +32,13 @@ func TestGetDefaultFIMConfig(t *testing.T) {
 func TestCreateSampleConfig(t *testing.T) {
 	// Set HOME to a temp directory
 	tmpDir := os.TempDir()
-	os.Setenv("HOME", tmpDir)
-	defer os.Unsetenv("HOME")
+	_ = os.Setenv("HOME", tmpDir)
+	defer func() { _ = os.Unsetenv("HOME") }()
 	
 	// Also set XDG_CONFIG_HOME to control where config is created
 	xdgConfigDir := filepath.Join(tmpDir, ".config")
-	os.Setenv("XDG_CONFIG_HOME", xdgConfigDir)
-	defer os.Unsetenv("XDG_CONFIG_HOME")
+	_ = os.Setenv("XDG_CONFIG_HOME", xdgConfigDir)
+	defer func() { _ = os.Unsetenv("XDG_CONFIG_HOME") }()
 	
 	err := CreateSampleConfig()
 	assert.NoError(t, err)
@@ -55,13 +55,13 @@ func TestCreateSampleConfig(t *testing.T) {
 	assert.Contains(t, string(data), "deepseek-v4-pro")
 	
 	// Clean up
-	os.RemoveAll(configPath)
+	_ = os.RemoveAll(configPath)
 }
 
 func TestGetConfigPath(t *testing.T) {
 	// Test with HOME set
-	os.Setenv("HOME", "/tmp/test")
-	defer os.Unsetenv("HOME")
+	_ = os.Setenv("HOME", "/tmp/test")
+	defer func() { _ = os.Unsetenv("HOME") }()
 	
 	path, err := GetConfigPath()
 	assert.NoError(t, err)
@@ -72,8 +72,8 @@ func TestGetConfigPath(t *testing.T) {
 func TestLoadConfigNoFile(t *testing.T) {
 	// Set HOME to a temp dir with no config file
 	tmpDir := os.TempDir()
-	os.Setenv("HOME", tmpDir)
-	defer os.Unsetenv("HOME")
+	_ = os.Setenv("HOME", tmpDir)
+	defer func() { _ = os.Unsetenv("HOME") }()
 	
 	config, err := LoadConfig()
 	// Should return empty config, not error (file doesn't exist)
@@ -89,10 +89,10 @@ func TestLoadConfigWithInvalidYAML(t *testing.T) {
 	configFile := filepath.Join(configPath, "config.yaml")
 	
 	_ = os.WriteFile(configFile, []byte("invalid: [yaml: content"), 0644)
-	defer os.RemoveAll(configPath)
+	defer func() { _ = os.RemoveAll(configPath) }()
 	
-	os.Setenv("HOME", tmpDir)
-	defer os.Unsetenv("HOME")
+	_ = os.Setenv("HOME", tmpDir)
+	defer func() { _ = os.Unsetenv("HOME") }()
 	
 	config, err := LoadConfig()
 	assert.Error(t, err)
@@ -103,8 +103,8 @@ func TestGetConfigPathWindows(t *testing.T) {
 	// Can't actually test Windows-specific code on Linux
 	// But we can test the function doesn't panic
 	// Set HOME to ensure the function has a home directory to work with
-	os.Setenv("HOME", "/tmp/test")
-	defer os.Unsetenv("HOME")
+	_ = os.Setenv("HOME", "/tmp/test")
+	defer func() { _ = os.Unsetenv("HOME") }()
 	
 	path, err := GetConfigPath()
 	assert.NoError(t, err)

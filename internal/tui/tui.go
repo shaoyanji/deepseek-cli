@@ -293,19 +293,19 @@ func (m Model) renderCostPanel() string {
 	sb.WriteString("\n")
 	
 	if m.TokenUsage != nil {
-		sb.WriteString(fmt.Sprintf("Session Total: %s\n", 
-			m.Styles.CostHighlight.Render(fmt.Sprintf("$%.4f USD", m.TokenUsage.CostUSD))))
-		sb.WriteString(fmt.Sprintf("Tokens: %d (prompt: %d, completion: %d)\n",
-			m.TokenUsage.TotalTokens, m.TokenUsage.PromptTokens, m.TokenUsage.CompletionTokens))
+		fmt.Fprintf(&sb, "Session Total: %s\n", 
+			m.Styles.CostHighlight.Render(fmt.Sprintf("$%.4f USD", m.TokenUsage.CostUSD)))
+		fmt.Fprintf(&sb, "Tokens: %d (prompt: %d, completion: %d)\n",
+			m.TokenUsage.TotalTokens, m.TokenUsage.PromptTokens, m.TokenUsage.CompletionTokens)
 	}
 	
 	// Show last turn costs
 	if len(m.TurnCosts) > 0 {
 		lastTurn := m.TurnCosts[len(m.TurnCosts)-1]
-		sb.WriteString(fmt.Sprintf("\nLast Turn (#%d): %s", 
+		fmt.Fprintf(&sb, "\nLast Turn (#%d): %s", 
 			lastTurn.TurnID,
-			m.Styles.CostHighlight.Render(fmt.Sprintf("$%.4f USD", lastTurn.CostUSD))))
-		sb.WriteString(fmt.Sprintf(" [%d tokens, %v]", lastTurn.TotalTokens, lastTurn.Duration.Round(time.Millisecond)))
+			m.Styles.CostHighlight.Render(fmt.Sprintf("$%.4f USD", lastTurn.CostUSD)))
+		fmt.Fprintf(&sb, " [%d tokens, %v]", lastTurn.TotalTokens, lastTurn.Duration.Round(time.Millisecond))
 	}
 	
 	return sb.String()
@@ -329,7 +329,7 @@ func (m Model) renderStatusBar() string {
 	
 	// Token usage summary
 	if m.TokenUsage != nil {
-		sb.WriteString(fmt.Sprintf(" | Tokens: %d", m.TokenUsage.TotalTokens))
+		fmt.Fprintf(&sb, " | Tokens: %d", m.TokenUsage.TotalTokens)
 	}
 	
 	// Streaming indicator

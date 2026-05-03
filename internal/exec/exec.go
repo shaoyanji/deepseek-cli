@@ -28,7 +28,7 @@ func ExecGo(code string) (*ExecResult, error) {
 	if err != nil {
 		return &ExecResult{ExitCode: 1}, err
 	}
-	defer os.Remove(tmpfile.Name())
+	defer func() { _ = os.Remove(tmpfile.Name()) }()
 	
 	if _, err := tmpfile.Write([]byte(code)); err != nil {
 		return &ExecResult{ExitCode: 1}, err
@@ -231,12 +231,12 @@ func ExecSandboxedDocker(lang string, code string) (*ExecResult, error) {
 			return &ExecResult{ExitCode: 1}, err
 		}
 		tmpfile = tmp.Name()
-		defer os.Remove(tmpfile)
+		defer func() { _ = os.Remove(tmpfile) }()
 		
 		if _, err := tmp.Write([]byte(code)); err != nil {
 			return &ExecResult{ExitCode: 1}, err
 		}
-		tmp.Close()
+		_ = tmp.Close()
 		
 		// Run Go code in Docker with mounted temp file
 		cmd = exec.Command("docker", "run", "--rm",
@@ -319,7 +319,7 @@ func createTempFile(code string, ext string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer tmpfile.Close()
+	defer func() { _ = tmpfile.Close() }()
 	
 	if _, err := tmpfile.Write([]byte(code)); err != nil {
 		return "", err

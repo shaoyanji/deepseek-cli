@@ -388,7 +388,7 @@ func TestHasStdinData(t *testing.T) {
 	
 	go func() {
 		_, _ = w.WriteString("test input")
-		w.Close()
+		_ = w.Close()
 	}()
 
 	result := hasStdinData()
@@ -410,8 +410,8 @@ func TestHasStdinData_NoData(t *testing.T) {
 	
 	// Close the write end so we don't leak file descriptors
 	// But keep the read end open
-	defer r.Close()
-	defer w.Close()
+	defer func() { _ = r.Close() }()
+	defer func() { _ = w.Close() }()
 	
 	// The function should not panic
 	result := hasStdinData()
@@ -876,8 +876,8 @@ func TestRun_InvalidCommand(t *testing.T) {
 func TestLaunchTUI_NoAPIKey(t *testing.T) {
 	// Save and restore env
 	oldKey := os.Getenv("DEEPSEEK_API_KEY")
-	defer os.Setenv("DEEPSEEK_API_KEY", oldKey)
-	os.Unsetenv("DEEPSEEK_API_KEY")
+	defer func() { _ = os.Setenv("DEEPSEEK_API_KEY", oldKey) }()
+	_ = os.Unsetenv("DEEPSEEK_API_KEY")
 
 	cmd := &cobra.Command{}
 	config := &Config{
@@ -925,8 +925,8 @@ func TestHandleStdinMode_EmptyInput(t *testing.T) {
 	// Create empty pipe for stdin
 	r, w, _ := os.Pipe()
 	os.Stdin = r
-	w.Close()
-	defer r.Close()
+	_ = w.Close()
+	defer func() { _ = r.Close() }()
 
 	cmd := &cobra.Command{}
 	config := &Config{
@@ -946,7 +946,7 @@ func TestExecuteStdinMode_EmptyInput(t *testing.T) {
 
 	r, w, _ := os.Pipe()
 	os.Stdin = r
-	w.Close()
+	_ = w.Close()
 
 	cmd := &cobra.Command{}
 	config := &Config{
@@ -977,10 +977,10 @@ func TestExecuteHistoryMode_InvalidJSON(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.Remove(tmpfile.Name())
+	defer func() { _ = os.Remove(tmpfile.Name()) }()
 
 	_, _ = tmpfile.WriteString("invalid json")
-	tmpfile.Close()
+	_ = tmpfile.Close()
 
 	cmd := &cobra.Command{}
 	config := &Config{
@@ -1307,8 +1307,8 @@ func TestExecuteSingleTurn_WithMockClient(t *testing.T) {
 func TestExecuteChatCommand_NoClientNoAPIKey(t *testing.T) {
 	// Save and restore env
 	oldKey := os.Getenv("DEEPSEEK_API_KEY")
-	defer os.Setenv("DEEPSEEK_API_KEY", oldKey)
-	os.Unsetenv("DEEPSEEK_API_KEY")
+	defer func() { _ = os.Setenv("DEEPSEEK_API_KEY", oldKey) }()
+	_ = os.Unsetenv("DEEPSEEK_API_KEY")
 
 	cmd := &cobra.Command{}
 	cmd.Flags().String("json", "", "JSON input")
@@ -1326,8 +1326,8 @@ func TestExecuteChatCommand_NoClientNoAPIKey(t *testing.T) {
 func TestExecuteFIMCommand_NoClientNoAPIKey(t *testing.T) {
 	// Save and restore env
 	oldKey := os.Getenv("DEEPSEEK_API_KEY")
-	defer os.Setenv("DEEPSEEK_API_KEY", oldKey)
-	os.Unsetenv("DEEPSEEK_API_KEY")
+	defer func() { _ = os.Setenv("DEEPSEEK_API_KEY", oldKey) }()
+	_ = os.Unsetenv("DEEPSEEK_API_KEY")
 
 	cmd := &cobra.Command{}
 	cmd.Flags().String("json", "", "JSON input")
@@ -1410,13 +1410,13 @@ func TestExecuteModelsCommand_NoClient(t *testing.T) {
 	oldKey := os.Getenv("DEEPSEEK_API_KEY")
 	oldBase := os.Getenv("DEEPSEEK_API_BASE")
 	defer func() {
-		os.Setenv("DEEPSEEK_API_KEY", oldKey)
-		os.Setenv("DEEPSEEK_API_BASE", oldBase)
+		_ = os.Setenv("DEEPSEEK_API_KEY", oldKey)
+		_ = os.Setenv("DEEPSEEK_API_BASE", oldBase)
 	}()
 
 	// Set env vars
-	os.Setenv("DEEPSEEK_API_KEY", "test-key")
-	os.Setenv("DEEPSEEK_API_BASE", "https://test.com")
+	_ = os.Setenv("DEEPSEEK_API_KEY", "test-key")
+	_ = os.Setenv("DEEPSEEK_API_BASE", "https://test.com")
 
 	cmd := &cobra.Command{}
 	err := executeModelsCommand(cmd, nil)
@@ -1431,13 +1431,13 @@ func TestExecuteBalanceCommand_NoClient(t *testing.T) {
 	oldKey := os.Getenv("DEEPSEEK_API_KEY")
 	oldBase := os.Getenv("DEEPSEEK_API_BASE")
 	defer func() {
-		os.Setenv("DEEPSEEK_API_KEY", oldKey)
-		os.Setenv("DEEPSEEK_API_BASE", oldBase)
+		_ = os.Setenv("DEEPSEEK_API_KEY", oldKey)
+		_ = os.Setenv("DEEPSEEK_API_BASE", oldBase)
 	}()
 
 	// Set env vars
-	os.Setenv("DEEPSEEK_API_KEY", "test-key")
-	os.Setenv("DEEPSEEK_API_BASE", "https://test.com")
+	_ = os.Setenv("DEEPSEEK_API_KEY", "test-key")
+	_ = os.Setenv("DEEPSEEK_API_BASE", "https://test.com")
 
 	cmd := &cobra.Command{}
 	err := executeBalanceCommand(cmd, nil)
@@ -1460,11 +1460,11 @@ func TestExecuteHistoryMode_WithMockClient(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.Remove(tmpfile.Name())
+	defer func() { _ = os.Remove(tmpfile.Name()) }()
 
 	history := `[{"role":"user","content":"test"}]`
 	_, _ = tmpfile.WriteString(history)
-	tmpfile.Close()
+	_ = tmpfile.Close()
 
 	cmd := &cobra.Command{}
 	config := &Config{
@@ -1495,7 +1495,7 @@ func TestExecuteStdinMode_WithMockClient(t *testing.T) {
 
 	go func() {
 		_, _ = w.WriteString("test input")
-		w.Close()
+		_ = w.Close()
 	}()
 
 	cmd := &cobra.Command{}
@@ -1659,7 +1659,7 @@ func TestRun_NoFlagsWithStdin(t *testing.T) {
 
 	go func() {
 		_, _ = w.WriteString("test input")
-		w.Close()
+		_ = w.Close()
 	}()
 
 	// Test with no flags but stdin has data (calls handleStdinMode)

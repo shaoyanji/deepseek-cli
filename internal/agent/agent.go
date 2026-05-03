@@ -297,7 +297,7 @@ func (t *FetchTool) Run(args map[string]interface{}) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch URL: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("HTTP request failed with status: %s", resp.Status)
@@ -411,10 +411,10 @@ func (t *WebSearchTool) Run(args map[string]interface{}) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("Exa API request failed with status: %s", resp.Status)
+		return "", fmt.Errorf("exa API request failed with status: %s", resp.Status)
 	}
 	
 	body, err := io.ReadAll(resp.Body)

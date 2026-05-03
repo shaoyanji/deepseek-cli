@@ -182,7 +182,8 @@ func extractContent(data []byte, completionType string) string {
 		return string(data)
 	}
 
-	if completionType == "chat" {
+	switch completionType {
+	case "chat":
 		if choices, ok := raw["choices"].([]interface{}); ok && len(choices) > 0 {
 			if choice, ok := choices[0].(map[string]interface{}); ok {
 				if message, ok := choice["message"].(map[string]interface{}); ok {
@@ -192,7 +193,7 @@ func extractContent(data []byte, completionType string) string {
 				}
 			}
 		}
-	} else if completionType == "fim" {
+	case "fim":
 		if choices, ok := raw["choices"].([]interface{}); ok && len(choices) > 0 {
 			if choice, ok := choices[0].(map[string]interface{}); ok {
 				if text, ok := choice["text"].(string); ok {

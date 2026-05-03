@@ -48,7 +48,7 @@ func (m *Manager) CreateSnapshot(sessionID string, turnID int, description strin
 	}
 
 	// Generate snapshot ID and filename
-	timestamp := time.Now().Format("20060102_150405")
+	timestamp := time.Now().Format("20060102_150405.000000")
 	snapshotID := fmt.Sprintf("%s_turn%d_%s", sessionID, turnID, timestamp)
 	filename := filepath.Join(m.snapshotDir, fmt.Sprintf("%s.tar.gz", snapshotID))
 
@@ -79,15 +79,15 @@ func (m *Manager) createArchive(filename string) (int, int64, error) {
 	if err != nil {
 		return 0, 0, fmt.Errorf("creating snapshot file: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	// Create gzip writer
 	gzWriter := gzip.NewWriter(f)
-	defer gzWriter.Close()
+	defer func() { _ = gzWriter.Close() }()
 
 	// Create tar writer
 	tarWriter := tar.NewWriter(gzWriter)
-	defer tarWriter.Close()
+	defer func() { _ = tarWriter.Close() }()
 
 	fileCount := 0
 	var totalSize int64
@@ -105,7 +105,9 @@ func (m *Manager) createArchive(filename string) (int, int64, error) {
 		}
 
 		// Skip .git directory to avoid conflicts with actual git history
-		if strings.Contains(relPath, ".git") {
+		// Check if the path is exactly ".git" or starts with ".git/" to avoid
+		// skipping legitimate files like .gitignore or .github
+		if relPath == ".git" || strings.HasPrefix(relPath, ".git"+string(filepath.Separator)) {
 			return nil
 		}
 
@@ -140,7 +142,7 @@ func (m *Manager) createArchive(filename string) (int, int64, error) {
 			if err != nil {
 				return fmt.Errorf("opening file %s: %w", path, err)
 			}
-			defer file.Close()
+			defer func() { _ = file.Close() }()
 
 			written, err := io.Copy(tarWriter, file)
 			if err != nil {
@@ -169,10 +171,48 @@ func (m *Manager) createArchive(filename string) (int, int64, error) {
 	return fileCount, totalSize, nil
 }
 
+// validatePath checks if a path is safe to extract within the workspace
+func (m *Manager) validatePath(path string) error {
+	// Check for absolute paths
+	if filepath.IsAbs(path) {
+		return fmt.Errorf("absolute path not allowed: %s", path)
+	}
+
+	// Check for path traversal attempts
+	if strings.Contains(path, "..") {
+		return fmt.Errorf("path traversal not allowed: %s", path)
+	}
+
+	// Join with workspace and verify the result is still within workspace
+	targetPath := filepath.Join(m.workspaceDir, path)
+	absWorkspace, err := filepath.Abs(m.workspaceDir)
+	if err != nil {
+		return fmt.Errorf("getting absolute workspace path: %w", err)
+	}
+
+	absTarget, err := filepath.Abs(targetPath)
+	if err != nil {
+		return fmt.Errorf("getting absolute target path: %w", err)
+	}
+
+	// Verify the target path is within the workspace
+	rel, err := filepath.Rel(absWorkspace, absTarget)
+	if err != nil {
+		return fmt.Errorf("calculating relative path: %w", err)
+	}
+
+	// If the relative path starts with "..", it's outside the workspace
+	if strings.HasPrefix(rel, "..") {
+		return fmt.Errorf("path escapes workspace: %s", path)
+	}
+
+	return nil
+}
+
 // Restore restores the workspace from a snapshot
 func (m *Manager) Restore(snapshotID string) error {
 	filename := filepath.Join(m.snapshotDir, fmt.Sprintf("%s.tar.gz", snapshotID))
-	
+
 	// Check if snapshot exists
 	if _, err := os.Stat(filename); os.IsNotExist(err) {
 		return fmt.Errorf("snapshot not found: %s", snapshotID)
@@ -188,14 +228,14 @@ func (m *Manager) Restore(snapshotID string) error {
 	if err != nil {
 		return fmt.Errorf("opening snapshot file: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	// Create gzip reader
 	gzReader, err := gzip.NewReader(f)
 	if err != nil {
 		return fmt.Errorf("creating gzip reader: %w", err)
 	}
-	defer gzReader.Close()
+	defer func() { _ = gzReader.Close() }()
 
 	// Create tar reader
 	tarReader := tar.NewReader(gzReader)
@@ -208,6 +248,11 @@ func (m *Manager) Restore(snapshotID string) error {
 		}
 		if err != nil {
 			return fmt.Errorf("reading tar: %w", err)
+		}
+
+		// Validate the path to prevent directory traversal
+		if err := m.validatePath(header.Name); err != nil {
+			return fmt.Errorf("invalid path in archive: %w", err)
 		}
 
 		targetPath := filepath.Join(m.workspaceDir, header.Name)
@@ -232,14 +277,14 @@ func (m *Manager) Restore(snapshotID string) error {
 			}
 
 			written, err := io.Copy(outFile, tarReader)
-			outFile.Close()
-			
+			_ = outFile.Close()
+
 			if err != nil {
 				return fmt.Errorf("extracting file %s: %w", targetPath, err)
 			}
 
 			if written != header.Size {
-				return fmt.Errorf("size mismatch for %s: expected %d, got %d", 
+				return fmt.Errorf("size mismatch for %s: expected %d, got %d",
 					targetPath, header.Size, written)
 			}
 
@@ -319,7 +364,7 @@ func (m *Manager) ListSnapshots(sessionID string) ([]*Snapshot, error) {
 
 		// Parse turn ID from filename
 		turnID := 0
-		fmt.Sscanf(strings.TrimPrefix(name, prefix), "%d_", &turnID)
+		_, _ = fmt.Sscanf(strings.TrimPrefix(name, prefix), "%d_", &turnID)
 
 		// Get file info
 		info, err := file.Info()
@@ -455,7 +500,7 @@ func (m *Manager) GetSnapshotInfo(snapshotID string) (*Snapshot, error) {
 	remaining := parts[1]
 	
 	turnID := 0
-	fmt.Sscanf(remaining, "%d_%s", &turnID)
+	_, _ = fmt.Sscanf(remaining, "%d_%s", &turnID)
 
 	snapshot := &Snapshot{
 		ID:        name,
@@ -481,13 +526,13 @@ func (m *Manager) countFilesInArchive(filename string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	gzReader, err := gzip.NewReader(f)
 	if err != nil {
 		return 0, err
 	}
-	defer gzReader.Close()
+	defer func() { _ = gzReader.Close() }()
 
 	tarReader := tar.NewReader(gzReader)
 	count := 0

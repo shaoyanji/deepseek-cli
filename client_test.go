@@ -147,33 +147,33 @@ func TestLoadConfig(t *testing.T) {
 	originalBase := os.Getenv("DEEPSEEK_API_BASE")
 	defer func() {
 		if originalAPIKey != "" {
-			os.Setenv("DEEPSEEK_API_KEY", originalAPIKey)
+			_ = os.Setenv("DEEPSEEK_API_KEY", originalAPIKey)
 		} else {
-			os.Unsetenv("DEEPSEEK_API_KEY")
+			_ = os.Unsetenv("DEEPSEEK_API_KEY")
 		}
 		if originalBase != "" {
-			os.Setenv("DEEPSEEK_API_BASE", originalBase)
+			_ = os.Setenv("DEEPSEEK_API_BASE", originalBase)
 		} else {
-			os.Unsetenv("DEEPSEEK_API_BASE")
+			_ = os.Unsetenv("DEEPSEEK_API_BASE")
 		}
 	}()
 
 	// Test with env vars set
-	os.Setenv("DEEPSEEK_API_KEY", "env-key")
-	os.Setenv("DEEPSEEK_API_BASE", "https://env-api.example.com")
-	
+	_ = os.Setenv("DEEPSEEK_API_KEY", "env-key")
+	_ = os.Setenv("DEEPSEEK_API_BASE", "https://env-api.example.com")
+
 	base, apiKey := loadConfig()
 	assert.Equal(t, "env-key", apiKey)
 	assert.Equal(t, "https://env-api.example.com", base)
 
 	// Test with only API key env var
-	os.Unsetenv("DEEPSEEK_API_BASE")
+	_ = os.Unsetenv("DEEPSEEK_API_BASE")
 	base, apiKey = loadConfig()
 	assert.Equal(t, "env-key", apiKey)
 	assert.Equal(t, "https://api.deepseek.com", base) // default
 
 	// Test with no env vars (should return defaults)
-	os.Unsetenv("DEEPSEEK_API_KEY")
+	_ = os.Unsetenv("DEEPSEEK_API_KEY")
 	base, apiKey = loadConfig()
 	assert.Equal(t, "", apiKey)
 	assert.Equal(t, "https://api.deepseek.com", base)
@@ -185,33 +185,33 @@ func TestLoadBetaConfig(t *testing.T) {
 	originalBase := os.Getenv("DEEPSEEK_API_BASE")
 	defer func() {
 		if originalAPIKey != "" {
-			os.Setenv("DEEPSEEK_API_KEY", originalAPIKey)
+			_ = os.Setenv("DEEPSEEK_API_KEY", originalAPIKey)
 		} else {
-			os.Unsetenv("DEEPSEEK_API_KEY")
+			_ = os.Unsetenv("DEEPSEEK_API_KEY")
 		}
 		if originalBase != "" {
-			os.Setenv("DEEPSEEK_API_BASE", originalBase)
+			_ = os.Setenv("DEEPSEEK_API_BASE", originalBase)
 		} else {
-			os.Unsetenv("DEEPSEEK_API_BASE")
+			_ = os.Unsetenv("DEEPSEEK_API_BASE")
 		}
 	}()
 
 	// Test with env vars set
-	os.Setenv("DEEPSEEK_API_KEY", "env-key")
-	os.Setenv("DEEPSEEK_API_BASE", "https://env-api.example.com")
-	
+	_ = os.Setenv("DEEPSEEK_API_KEY", "env-key")
+	_ = os.Setenv("DEEPSEEK_API_BASE", "https://env-api.example.com")
+
 	base, apiKey := loadBetaConfig()
 	assert.Equal(t, "env-key", apiKey)
 	assert.Equal(t, "https://env-api.example.com", base)
 
 	// Test with only API key env var (should use beta default)
-	os.Unsetenv("DEEPSEEK_API_BASE")
+	_ = os.Unsetenv("DEEPSEEK_API_BASE")
 	base, apiKey = loadBetaConfig()
 	assert.Equal(t, "env-key", apiKey)
 	assert.Equal(t, "https://api.deepseek.com/beta", base) // beta default
 
 	// Test with no env vars (should return beta defaults)
-	os.Unsetenv("DEEPSEEK_API_KEY")
+	_ = os.Unsetenv("DEEPSEEK_API_KEY")
 	base, apiKey = loadBetaConfig()
 	assert.Equal(t, "", apiKey)
 	assert.Equal(t, "https://api.deepseek.com/beta", base)
@@ -219,8 +219,8 @@ func TestLoadBetaConfig(t *testing.T) {
 
 func TestGetEnv(t *testing.T) {
 	// Test getEnv helper
-	os.Setenv("TEST_VAR_123", "test_value")
-	defer os.Unsetenv("TEST_VAR_123")
+	_ = os.Setenv("TEST_VAR_123", "test_value")
+	defer func() { _ = os.Unsetenv("TEST_VAR_123") }()
 	
 	val := getEnv("TEST_VAR_123", "")
 	assert.Equal(t, "test_value", val)

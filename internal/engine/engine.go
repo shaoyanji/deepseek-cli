@@ -46,7 +46,7 @@ type ToolCall struct {
 type ToolResult struct {
 	ToolCallID string
 	Result     string
-	Error      error
+	Error      string
 }
 
 // TokenUsage tracks token consumption
@@ -64,7 +64,7 @@ type Session struct {
 	CurrentTurn  int
 	Model        string
 	Mode         execpolicy.ExecutionMode
-	Policy       execpolicy.Policy
+	Policy       execpolicy.Policy `json:"-"`
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 	TotalUsage   *TokenUsage
@@ -182,7 +182,7 @@ func (e *Engine) executeTurn(ctx context.Context, turn *Turn) error {
 	turn.Status = TurnRunning
 	
 	// Build messages from session history
-	messages := e.buildMessages(turn.UserInput)
+	messages := e.buildMessages()
 	
 	// Get tool definitions
 	tools := e.getToolDefinitions()
@@ -224,7 +224,7 @@ func (e *Engine) executeTurn(ctx context.Context, turn *Turn) error {
 	return nil
 }
 
-func (e *Engine) buildMessages(userInput string) []Message {
+func (e *Engine) buildMessages() []Message {
 	var messages []Message
 	
 	// Add system message based on mode
@@ -243,7 +243,7 @@ func (e *Engine) buildMessages(userInput string) []Message {
 		}
 		// Add tool results
 		for _, result := range turn.ToolResults {
-			if result.Error == nil {
+			if result.Error == "" {
 				messages = append(messages, Message{
 					Role:    "tool",
 					Content: result.Result,
@@ -251,9 +251,6 @@ func (e *Engine) buildMessages(userInput string) []Message {
 			}
 		}
 	}
-	
-	// Add current user input
-	messages = append(messages, Message{Role: "user", Content: userInput})
 	
 	return messages
 }
@@ -284,8 +281,8 @@ Take initiative to complete tasks efficiently.`
 }
 
 func (e *Engine) getToolDefinitions() []ToolDefinition {
-	// Basic tool set - would be extended based on registered tools
-	return []ToolDefinition{
+	// Read-only tools available in all modes
+	readOnlyTools := []ToolDefinition{
 		{
 			Name:        "view",
 			Description: "View the contents of a file",
@@ -300,6 +297,88 @@ func (e *Engine) getToolDefinitions() []ToolDefinition {
 				"required": []string{"path"},
 			},
 		},
+		{
+			Name:        "ls",
+			Description: "List files and directories in a path",
+			Parameters: map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"path": map[string]interface{}{
+						"type":        "string",
+						"description": "Path to list (defaults to current directory)",
+					},
+				},
+				"required": []string{},
+			},
+		},
+		{
+			Name:        "grep",
+			Description: "Search for patterns in files using regular expressions",
+			Parameters: map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"pattern": map[string]interface{}{
+						"type":        "string",
+						"description": "Regular expression pattern to search for",
+					},
+					"path": map[string]interface{}{
+						"type":        "string",
+						"description": "Directory or file to search in (defaults to current directory)",
+					},
+				},
+				"required": []string{"pattern"},
+			},
+		},
+		{
+			Name:        "fetch",
+			Description: "Fetch content from a URL",
+			Parameters: map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"url": map[string]interface{}{
+						"type":        "string",
+						"description": "URL to fetch content from",
+					},
+				},
+				"required": []string{"url"},
+			},
+		},
+		{
+			Name:        "web_search",
+			Description: "Search the web for information",
+			Parameters: map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"query": map[string]interface{}{
+						"type":        "string",
+						"description": "Search query",
+					},
+				},
+				"required": []string{"query"},
+			},
+		},
+		{
+			Name:        "lsp",
+			Description: "Get language server protocol information (symbols, definitions, references)",
+			Parameters: map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"path": map[string]interface{}{
+						"type":        "string",
+						"description": "File path to analyze",
+					},
+					"query": map[string]interface{}{
+						"type":        "string",
+						"description": "LSP query type (symbols, definitions, references)",
+					},
+				},
+				"required": []string{"path"},
+			},
+		},
+	}
+
+	// Write tools only available in Agent and YOLO modes
+	writeTools := []ToolDefinition{
 		{
 			Name:        "edit",
 			Description: "Edit or create a file with new content",
@@ -333,6 +412,16 @@ func (e *Engine) getToolDefinitions() []ToolDefinition {
 			},
 		},
 	}
+
+	// Return appropriate tool set based on mode
+	switch e.session.Mode {
+	case execpolicy.ModeAcme:
+		return readOnlyTools
+	case execpolicy.ModeAgent, execpolicy.ModeYOLO:
+		return append(readOnlyTools, writeTools...)
+	default:
+		return readOnlyTools
+	}
 }
 
 func (e *Engine) executeToolCalls(ctx context.Context, turn *Turn) error {
@@ -342,7 +431,7 @@ func (e *Engine) executeToolCalls(ctx context.Context, turn *Turn) error {
 		if err != nil {
 			turn.ToolResults = append(turn.ToolResults, ToolResult{
 				ToolCallID: call.ID,
-				Error:      err,
+				Error:      err.Error(),
 			})
 			continue
 		}
@@ -350,7 +439,7 @@ func (e *Engine) executeToolCalls(ctx context.Context, turn *Turn) error {
 		if !approval.Approved {
 			turn.ToolResults = append(turn.ToolResults, ToolResult{
 				ToolCallID: call.ID,
-				Error:      fmt.Errorf("tool execution denied: %s", approval.Reason),
+				Error:      fmt.Sprintf("tool execution denied: %s", approval.Reason),
 			})
 			continue
 		}
@@ -363,10 +452,15 @@ func (e *Engine) executeToolCalls(ctx context.Context, turn *Turn) error {
 		// Execute tool
 		result, err := e.toolExecutor.Execute(ctx, call.Name, call.Arguments)
 		
+		var errStr string
+		if err != nil {
+			errStr = err.Error()
+		}
+		
 		toolResult := ToolResult{
 			ToolCallID: call.ID,
 			Result:     result,
-			Error:      err,
+			Error:      errStr,
 		}
 		
 		turn.ToolResults = append(turn.ToolResults, toolResult)
@@ -381,6 +475,10 @@ func (e *Engine) executeToolCalls(ctx context.Context, turn *Turn) error {
 }
 
 func (e *Engine) updateSessionUsage(usage *TokenUsage) {
+	if usage == nil {
+		return
+	}
+	
 	if e.session.TotalUsage == nil {
 		e.session.TotalUsage = &TokenUsage{}
 	}

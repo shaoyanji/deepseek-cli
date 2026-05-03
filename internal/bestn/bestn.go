@@ -69,7 +69,7 @@ func (b *BestN) GenerateCandidates(prompt string) ([]string, error) {
 	}
 
 	if b.N <= 0 {
-		return nil, fmt.Errorf("N must be positive")
+		return nil, fmt.Errorf("n must be positive")
 	}
 
 	candidates := make([]string, 0, b.N)

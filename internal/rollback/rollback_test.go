@@ -114,6 +114,84 @@ func TestCreateSnapshotSkipsGitAndSnapshotDirs(t *testing.T) {
 	}
 }
 
+func TestCreateSnapshot_IncludesGitignoreAndGitHub(t *testing.T) {
+	tmpDir := t.TempDir()
+	workspaceDir := t.TempDir()
+
+	// Create .git directory (should be skipped)
+	gitDir := filepath.Join(workspaceDir, ".git", "objects")
+	if err := os.MkdirAll(gitDir, 0755); err != nil {
+		t.Fatalf("failed to create .git dir: %v", err)
+	}
+	gitFile := filepath.Join(gitDir, "test.obj")
+	if err := os.WriteFile(gitFile, []byte("git object"), 0644); err != nil {
+		t.Fatalf("failed to create git file: %v", err)
+	}
+
+	// Create .gitignore (should be included)
+	gitignoreFile := filepath.Join(workspaceDir, ".gitignore")
+	if err := os.WriteFile(gitignoreFile, []byte("*.log\n"), 0644); err != nil {
+		t.Fatalf("failed to create .gitignore: %v", err)
+	}
+
+	// Create .github directory (should be included)
+	githubDir := filepath.Join(workspaceDir, ".github", "workflows")
+	if err := os.MkdirAll(githubDir, 0755); err != nil {
+		t.Fatalf("failed to create .github dir: %v", err)
+	}
+	githubFile := filepath.Join(githubDir, "ci.yml")
+	if err := os.WriteFile(githubFile, []byte("workflow config"), 0644); err != nil {
+		t.Fatalf("failed to create github file: %v", err)
+	}
+
+	// Create regular file
+	regularFile := filepath.Join(workspaceDir, "regular.txt")
+	if err := os.WriteFile(regularFile, []byte("regular content"), 0644); err != nil {
+		t.Fatalf("failed to create regular file: %v", err)
+	}
+
+	mgr := NewManager(tmpDir, workspaceDir)
+
+	snapshot, err := mgr.CreateSnapshot("test-session", 1, "Test snapshot")
+	if err != nil {
+		t.Fatalf("failed to create snapshot: %v", err)
+	}
+
+	// Snapshot should contain .gitignore, .github/workflows/ci.yml, and regular.txt (not .git)
+	// Expected: .gitignore, .github/workflows/ci.yml, regular.txt = 3 files
+	if snapshot.FileCount != 3 {
+		t.Errorf("expected FileCount 3 (.gitignore, .github/workflows/ci.yml, regular.txt), got %d", snapshot.FileCount)
+	}
+
+	// Verify by restoring and checking contents
+	if err := mgr.Restore(snapshot.ID); err != nil {
+		t.Fatalf("failed to restore: %v", err)
+	}
+
+	// .gitignore should exist
+	if _, err := os.Stat(gitignoreFile); os.IsNotExist(err) {
+		t.Error(".gitignore should exist after restore")
+	}
+
+	// .github directory should exist
+	if _, err := os.Stat(githubDir); os.IsNotExist(err) {
+		t.Error(".github directory should exist after restore")
+	}
+
+	// .github/workflows/ci.yml should exist
+	if _, err := os.Stat(githubFile); os.IsNotExist(err) {
+		t.Error(".github/workflows/ci.yml should exist after restore")
+	}
+
+	// Regular file should exist
+	if _, err := os.Stat(regularFile); os.IsNotExist(err) {
+		t.Error("regular.txt should exist after restore")
+	}
+
+	// Note: .git directory will still exist after restore because cleanWorkspace preserves it
+	// This is intentional behavior - we don't want to destroy the actual git history
+}
+
 func TestRestore(t *testing.T) {
 	tmpDir := t.TempDir()
 	workspaceDir := t.TempDir()
@@ -402,7 +480,7 @@ func TestCleanupOldSnapshots(t *testing.T) {
 		if !f.IsDir() && strings.HasSuffix(f.Name(), ".tar.gz") {
 			oldFile := filepath.Join(tmpDir, f.Name())
 			oldTime := time.Now().Add(-24 * time.Hour)
-			os.Chtimes(oldFile, oldTime, oldTime)
+			_ = os.Chtimes(oldFile, oldTime, oldTime)
 			oldCount++
 		}
 	}
@@ -474,9 +552,106 @@ func TestGetSnapshotInfoNonExistent(t *testing.T) {
 func TestDefaultSnapshotDir(t *testing.T) {
 	workspaceDir := "/tmp/test-workspace"
 	expected := filepath.Join(workspaceDir, ".deepseek-snapshots")
-	
+
 	result := DefaultSnapshotDir(workspaceDir)
 	if result != expected {
 		t.Errorf("expected %s, got %s", expected, result)
+	}
+}
+
+func TestValidatePath_AbsolutePath(t *testing.T) {
+	tmpDir := t.TempDir()
+	workspaceDir := t.TempDir()
+
+	mgr := NewManager(tmpDir, workspaceDir)
+
+	// Test absolute paths (Unix-style)
+	absolutePaths := []string{
+		"/etc/passwd",
+		"/tmp/test",
+		"/usr/local/bin",
+	}
+
+	for _, path := range absolutePaths {
+		err := mgr.validatePath(path)
+		if err == nil {
+			t.Errorf("expected error for absolute path %s", path)
+		}
+		if !strings.Contains(err.Error(), "absolute path not allowed") {
+			t.Errorf("expected 'absolute path not allowed' error for %s, got: %v", path, err)
+		}
+	}
+}
+
+func TestValidatePath_PathTraversal(t *testing.T) {
+	tmpDir := t.TempDir()
+	workspaceDir := t.TempDir()
+
+	mgr := NewManager(tmpDir, workspaceDir)
+
+	// Test path traversal attempts
+	traversalPaths := []string{
+		"../etc/passwd",
+		"../../tmp/test",
+		"test/../../../etc",
+		"./../test",
+	}
+
+	for _, path := range traversalPaths {
+		err := mgr.validatePath(path)
+		if err == nil {
+			t.Errorf("expected error for traversal path %s", path)
+		}
+		if !strings.Contains(err.Error(), "path traversal not allowed") {
+			t.Errorf("expected 'path traversal not allowed' error for %s, got: %v", path, err)
+		}
+	}
+}
+
+func TestValidatePath_ValidPaths(t *testing.T) {
+	tmpDir := t.TempDir()
+	workspaceDir := t.TempDir()
+
+	mgr := NewManager(tmpDir, workspaceDir)
+
+	// Test valid paths
+	validPaths := []string{
+		"test.txt",
+		"subdir/test.txt",
+		"deep/nested/path/file.txt",
+		"./relative/path.txt",
+	}
+
+	for _, path := range validPaths {
+		err := mgr.validatePath(path)
+		if err != nil {
+			t.Errorf("unexpected error for valid path %s: %v", path, err)
+		}
+	}
+}
+
+func TestValidatePath_EscapesWorkspace(t *testing.T) {
+	tmpDir := t.TempDir()
+	workspaceDir := t.TempDir()
+
+	mgr := NewManager(tmpDir, workspaceDir)
+
+	// Create a subdirectory in workspace
+	subdir := filepath.Join(workspaceDir, "subdir")
+	if err := os.MkdirAll(subdir, 0755); err != nil {
+		t.Fatalf("failed to create subdir: %v", err)
+	}
+
+	// Test paths that might escape through symlinks or other means
+	escapePaths := []string{
+		"subdir/../../etc",
+		"./subdir/../../../tmp",
+	}
+
+	for _, path := range escapePaths {
+		err := mgr.validatePath(path)
+		if err == nil {
+			t.Errorf("expected error for escape path %s", path)
+		}
 	}
 }
