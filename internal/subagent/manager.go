@@ -206,16 +206,24 @@ func (m *Manager) WaitForTask(ctx context.Context, id int) (string, error) {
 		case <-ctx.Done():
 			return "", ctx.Err()
 		case <-ticker.C:
-			task, err := m.GetTask(id)
-			if err != nil {
-				return "", err
+			m.mu.Lock()
+			task, ok := m.tasks[id]
+			if !ok {
+				m.mu.Unlock()
+				return "", fmt.Errorf("task %d not found", id)
 			}
 			
-			switch task.Status {
+			// Copy the values we need while holding the lock
+			status := task.Status
+			result := task.Result
+			taskErr := task.Error
+			m.mu.Unlock()
+			
+			switch status {
 			case TaskCompleted:
-				return task.Result, nil
+				return result, nil
 			case TaskFailed:
-				return "", task.Error
+				return "", taskErr
 			case TaskCancelled:
 				return "", fmt.Errorf("task cancelled")
 			}
