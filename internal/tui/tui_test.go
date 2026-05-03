@@ -3,6 +3,7 @@ package tui
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/charmbracelet/bubbletea"
 )
@@ -130,11 +131,11 @@ func TestRenderStatusBar(t *testing.T) {
 	if !strings.Contains(view, "deepseek-v4-pro") {
 		t.Errorf("renderStatusBar() = %q, want to contain %q", view, "deepseek-v4-pro")
 	}
-	if !strings.Contains(view, "100") {
-		t.Errorf("renderStatusBar() = %q, want to contain %q", view, "100")
+	if !strings.Contains(view, "150") {
+		t.Errorf("renderStatusBar() = %q, want to contain %q", view, "150")
 	}
-	if !strings.Contains(view, "50") {
-		t.Errorf("renderStatusBar() = %q, want to contain %q", view, "50")
+	if !strings.Contains(view, "Mode:") {
+		t.Errorf("renderStatusBar() = %q, want to contain %q", view, "Mode:")
 	}
 }
 
@@ -269,5 +270,231 @@ func TestCodeHighlighting(t *testing.T) {
 	// Glamour should render markdown with code blocks
 	if !strings.Contains(view, "func main()") {
 		t.Errorf("renderChatView() = %q, want to contain %q", view, "func main()")
+	}
+}
+
+// TestThinkingState tests the thinking state functionality
+func TestThinkingState(t *testing.T) {
+	m := InitialModel()
+	
+	// Initially thinking should be inactive
+	if m.Thinking.Active {
+		t.Error("Thinking should be inactive initially")
+	}
+	
+	// Update thinking with content
+	m.UpdateThinking("Analyzing the codebase...", true)
+	
+	if !m.Thinking.Active {
+		t.Error("Thinking should be active after update")
+	}
+	if m.Thinking.Content != "Analyzing the codebase..." {
+		t.Errorf("Thinking.Content = %q, want %q", m.Thinking.Content, "Analyzing the codebase...")
+	}
+	if m.Thinking.StartTime.IsZero() {
+		t.Error("StartTime should be set when thinking becomes active")
+	}
+	
+	// Deactivate thinking
+	m.UpdateThinking("Analysis complete.", false)
+	
+	if m.Thinking.Active {
+		t.Error("Thinking should be inactive after deactivation")
+	}
+	if m.Thinking.StartTime.IsZero() == false {
+		t.Error("StartTime should be reset when thinking is deactivated")
+	}
+}
+
+// TestRenderThinkingView tests the thinking panel rendering
+func TestRenderThinkingView(t *testing.T) {
+	m := InitialModel()
+	
+	// Empty thinking should return empty string
+	view := m.renderThinkingView()
+	if view != "" {
+		t.Errorf("renderThinkingView() with no thinking = %q, want empty", view)
+	}
+	
+	// Active thinking should render
+	m.UpdateThinking("Processing your request...", true)
+	view = m.renderThinkingView()
+	if view == "" {
+		t.Error("renderThinkingView() with active thinking should not be empty")
+	}
+	if !strings.Contains(view, "🧠 Thinking") {
+		t.Errorf("renderThinkingView() = %q, want to contain thinking emoji", view)
+	}
+	if !strings.Contains(view, "processing") {
+		t.Errorf("renderThinkingView() = %q, want to contain processing indicator", view)
+	}
+}
+
+// TestTurnCost tests the turn cost tracking
+func TestTurnCost(t *testing.T) {
+	m := InitialModel()
+	
+	// Add a turn cost
+	m.AddTurnCost(1, 100, 50, 150, 0.0025, 2*time.Second)
+	
+	if len(m.TurnCosts) != 1 {
+		t.Errorf("len(TurnCosts) = %d, want 1", len(m.TurnCosts))
+	}
+	
+	cost := m.TurnCosts[0]
+	if cost.TurnID != 1 {
+		t.Errorf("TurnID = %d, want 1", cost.TurnID)
+	}
+	if cost.PromptTokens != 100 {
+		t.Errorf("PromptTokens = %d, want 100", cost.PromptTokens)
+	}
+	if cost.CompTokens != 50 {
+		t.Errorf("CompTokens = %d, want 50", cost.CompTokens)
+	}
+	if cost.TotalTokens != 150 {
+		t.Errorf("TotalTokens = %d, want 150", cost.TotalTokens)
+	}
+	if cost.CostUSD != 0.0025 {
+		t.Errorf("CostUSD = %f, want 0.0025", cost.CostUSD)
+	}
+	if cost.Duration != 2*time.Second {
+		t.Errorf("Duration = %v, want 2s", cost.Duration)
+	}
+}
+
+// TestRenderCostPanel tests the cost panel rendering
+func TestRenderCostPanel(t *testing.T) {
+	m := InitialModel()
+	
+	// Set session token usage
+	m.TokenUsage = &TokenUsage{
+		PromptTokens:     500,
+		CompletionTokens: 250,
+		TotalTokens:      750,
+		CostUSD:          0.0125,
+	}
+	
+	// Add turn costs
+	m.AddTurnCost(1, 100, 50, 150, 0.0025, 1*time.Second)
+	m.AddTurnCost(2, 200, 100, 300, 0.0050, 2*time.Second)
+	
+	view := m.renderCostPanel()
+	
+	if !strings.Contains(view, "💰 Cost Tracking") {
+		t.Errorf("renderCostPanel() = %q, want to contain cost tracking header", view)
+	}
+	if !strings.Contains(view, "$0.0125") {
+		t.Errorf("renderCostPanel() = %q, want to contain session cost", view)
+	}
+	if !strings.Contains(view, "Last Turn") {
+		t.Errorf("renderCostPanel() = %q, want to contain last turn info", view)
+	}
+	if !strings.Contains(view, "#2") {
+		t.Errorf("renderCostPanel() = %q, want to contain turn #2", view)
+	}
+}
+
+// TestSetMode tests mode setting
+func TestSetMode(t *testing.T) {
+	m := InitialModel()
+	
+	modes := []string{"acme", "agent", "yolo"}
+	for _, mode := range modes {
+		m.SetMode(mode)
+		if m.Mode != mode {
+			t.Errorf("SetMode(%q) = %q, want %q", mode, m.Mode, mode)
+		}
+	}
+}
+
+// TestSetWorkspacePath tests workspace path setting
+func TestSetWorkspacePath(t *testing.T) {
+	m := InitialModel()
+	
+	path := "/home/user/project"
+	m.SetWorkspacePath(path)
+	
+	if m.WorkspacePath != path {
+		t.Errorf("SetWorkspacePath(%q) = %q, want %q", path, m.WorkspacePath, path)
+	}
+}
+
+// TestUpdateViewportWithThinking tests viewport sizing with thinking panel
+func TestUpdateViewportWithThinking(t *testing.T) {
+	m := InitialModel()
+	m.Width = 100
+	m.Height = 40
+	
+	// Without thinking
+	m.UpdateViewport()
+	expectedHeight := 40 - 4 - 1 - 6 - 2 // height - input - statusbar - cost - padding
+	if m.Viewport.Height < expectedHeight-8 { // thinking can take space
+		t.Errorf("Viewport.Height = %d, want at least %d", m.Viewport.Height, expectedHeight-8)
+	}
+	
+	// With thinking active
+	m.UpdateThinking("Thinking content", true)
+	m.UpdateViewport()
+	
+	if m.ThinkingViewport.Height != 8 {
+		t.Errorf("ThinkingViewport.Height = %d, want 8", m.ThinkingViewport.Height)
+	}
+}
+
+// TestViewLayout tests the complete view layout
+func TestViewLayout(t *testing.T) {
+	m := InitialModel()
+	m.Width = 100
+	m.Height = 40
+	
+	// Add some content
+	m.AddMessage("user", "Hello")
+	m.AddMessage("assistant", "Hi there!")
+	m.UpdateThinking("Processing...", true)
+	m.TokenUsage = &TokenUsage{
+		TotalTokens: 100,
+		CostUSD:     0.001,
+	}
+	
+	view := m.View()
+	
+	// Check that all sections are present
+	if !strings.Contains(view, "Hello") {
+		t.Error("View should contain user message")
+	}
+	if !strings.Contains(view, "Hi there!") {
+		t.Error("View should contain assistant message")
+	}
+	if !strings.Contains(view, "🧠 Thinking") {
+		t.Error("View should contain thinking panel")
+	}
+	if !strings.Contains(view, "💰 Cost Tracking") {
+		t.Error("View should contain cost panel")
+	}
+	if !strings.Contains(view, "Mode:") {
+		t.Error("View should contain mode indicator")
+	}
+}
+
+// TestMultipleTurnCosts tests tracking multiple turns
+func TestMultipleTurnCosts(t *testing.T) {
+	m := InitialModel()
+	
+	// Simulate multiple turns
+	for i := 1; i <= 5; i++ {
+		m.AddTurnCost(i, i*100, i*50, i*150, float64(i)*0.0025, time.Duration(i)*time.Second)
+	}
+	
+	if len(m.TurnCosts) != 5 {
+		t.Errorf("len(TurnCosts) = %d, want 5", len(m.TurnCosts))
+	}
+	
+	// Verify last turn
+	lastTurn := m.TurnCosts[4]
+	if lastTurn.TurnID != 5 {
+		t.Errorf("Last turn ID = %d, want 5", lastTurn.TurnID)
+	}
+	if lastTurn.CostUSD != 0.0125 {
+		t.Errorf("Last turn cost = %f, want 0.0125", lastTurn.CostUSD)
 	}
 }
