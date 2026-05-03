@@ -1,1 +1,1 @@
-Nothing should be ignored since the changes only include source code files (.go files) without any build artifacts, dependencies, or temporary files.
+Nothing should be ignored since only Go source files (.go) were added without any build artifacts, dependencies, or temporary files.
