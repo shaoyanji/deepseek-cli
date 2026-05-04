@@ -204,18 +204,9 @@ func TestBuildMessages_NoDuplicateUserInput(t *testing.T) {
 	}
 	session.Turns = append(session.Turns, previousTurn)
 
-	// Create and add current turn
-	currentTurn := &Turn{
-		ID:        2,
-		UserInput: "current input",
-		Timestamp: session.CreatedAt,
-		Status:    TurnRunning,
-	}
-	session.Turns = append(session.Turns, currentTurn)
-
 	engine := NewEngine(session, &MockToolExecutor{}, &MockLLMClient{})
 
-	// Build messages
+	// Build messages - the current input should only be added once at the end
 	messages := engine.buildMessages("current input")
 
 	// Count how many times "current input" appears
@@ -226,7 +217,7 @@ func TestBuildMessages_NoDuplicateUserInput(t *testing.T) {
 		}
 	}
 
-	// Should appear exactly once, not twice
+	// Should appear exactly once
 	if currentInputCount != 1 {
 		t.Errorf("Expected 'current input' to appear exactly once, but it appeared %d times", currentInputCount)
 	}

@@ -46,7 +46,7 @@ type ToolCall struct {
 type ToolResult struct {
 	ToolCallID string
 	Result     string
-	Error      error
+	Error      string `json:"Error,omitempty"`
 }
 
 // TokenUsage tracks token consumption
@@ -64,7 +64,7 @@ type Session struct {
 	CurrentTurn  int
 	Model        string
 	Mode         execpolicy.ExecutionMode
-	Policy       execpolicy.Policy
+	Policy       execpolicy.Policy `json:"-"` // Skip policy in JSON serialization
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 	TotalUsage   *TokenUsage
@@ -284,8 +284,8 @@ Take initiative to complete tasks efficiently.`
 }
 
 func (e *Engine) getToolDefinitions() []ToolDefinition {
-	// Basic tool set - would be extended based on registered tools
-	return []ToolDefinition{
+	// Base tools available in all modes
+	baseTools := []ToolDefinition{
 		{
 			Name:        "view",
 			Description: "View the contents of a file",
@@ -300,6 +300,88 @@ func (e *Engine) getToolDefinitions() []ToolDefinition {
 				"required": []string{"path"},
 			},
 		},
+		{
+			Name:        "ls",
+			Description: "List directory contents",
+			Parameters: map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"path": map[string]interface{}{
+						"type":        "string",
+						"description": "Path to the directory to list",
+					},
+				},
+				"required": []string{"path"},
+			},
+		},
+		{
+			Name:        "grep",
+			Description: "Search for patterns in files",
+			Parameters: map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"pattern": map[string]interface{}{
+						"type":        "string",
+						"description": "Pattern to search for",
+					},
+					"path": map[string]interface{}{
+						"type":        "string",
+						"description": "Path to search in",
+					},
+				},
+				"required": []string{"pattern"},
+			},
+		},
+		{
+			Name:        "fetch",
+			Description: "Fetch content from a URL",
+			Parameters: map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"url": map[string]interface{}{
+						"type":        "string",
+						"description": "URL to fetch",
+					},
+				},
+				"required": []string{"url"},
+			},
+		},
+		{
+			Name:        "web_search",
+			Description: "Search the web",
+			Parameters: map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"query": map[string]interface{}{
+						"type":        "string",
+						"description": "Search query",
+					},
+				},
+				"required": []string{"query"},
+			},
+		},
+		{
+			Name:        "lsp",
+			Description: "Language server protocol operations",
+			Parameters: map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"operation": map[string]interface{}{
+						"type":        "string",
+						"description": "LSP operation to perform",
+					},
+					"path": map[string]interface{}{
+						"type":        "string",
+						"description": "File path",
+					},
+				},
+				"required": []string{"operation"},
+			},
+		},
+	}
+
+	// Write tools (not available in Acme mode)
+	writeTools := []ToolDefinition{
 		{
 			Name:        "edit",
 			Description: "Edit or create a file with new content",
@@ -333,6 +415,14 @@ func (e *Engine) getToolDefinitions() []ToolDefinition {
 			},
 		},
 	}
+
+	// Return appropriate tools based on mode
+	if e.session.Mode == execpolicy.ModeAcme {
+		return baseTools
+	}
+	
+	// Agent and YOLO modes get all tools
+	return append(baseTools, writeTools...)
 }
 
 func (e *Engine) executeToolCalls(ctx context.Context, turn *Turn) error {
@@ -342,7 +432,7 @@ func (e *Engine) executeToolCalls(ctx context.Context, turn *Turn) error {
 		if err != nil {
 			turn.ToolResults = append(turn.ToolResults, ToolResult{
 				ToolCallID: call.ID,
-				Error:      err,
+				Error:      err.Error(),
 			})
 			continue
 		}
@@ -350,7 +440,7 @@ func (e *Engine) executeToolCalls(ctx context.Context, turn *Turn) error {
 		if !approval.Approved {
 			turn.ToolResults = append(turn.ToolResults, ToolResult{
 				ToolCallID: call.ID,
-				Error:      fmt.Errorf("tool execution denied: %s", approval.Reason),
+				Error:      fmt.Errorf("tool execution denied: %s", approval.Reason).Error(),
 			})
 			continue
 		}
@@ -363,10 +453,14 @@ func (e *Engine) executeToolCalls(ctx context.Context, turn *Turn) error {
 		// Execute tool
 		result, err := e.toolExecutor.Execute(ctx, call.Name, call.Arguments)
 		
+		errorStr := ""
+		if err != nil {
+			errorStr = err.Error()
+		}
 		toolResult := ToolResult{
 			ToolCallID: call.ID,
 			Result:     result,
-			Error:      err,
+			Error:      errorStr,
 		}
 		
 		turn.ToolResults = append(turn.ToolResults, toolResult)
@@ -381,6 +475,10 @@ func (e *Engine) executeToolCalls(ctx context.Context, turn *Turn) error {
 }
 
 func (e *Engine) updateSessionUsage(usage *TokenUsage) {
+	if usage == nil {
+		return
+	}
+	
 	if e.session.TotalUsage == nil {
 		e.session.TotalUsage = &TokenUsage{}
 	}
