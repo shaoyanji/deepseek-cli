@@ -243,7 +243,7 @@ func (e *Engine) buildMessages(userInput string) []Message {
 		}
 		// Add tool results
 		for _, result := range turn.ToolResults {
-			if result.Error == nil {
+			if result.Error == "" {
 				messages = append(messages, Message{
 					Role:    "tool",
 					Content: result.Result,

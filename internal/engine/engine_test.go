@@ -3,7 +3,6 @@ package engine
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"testing"
 
 	"deepseek-cli/internal/execpolicy"
@@ -124,7 +123,7 @@ func TestSessionSerialization_ToolErrorString(t *testing.T) {
 	toolResult := ToolResult{
 		ToolCallID: "call-123",
 		Result:     "",
-		Error:      errors.New("tool execution failed: permission denied"),
+		Error:      "tool execution failed: permission denied",
 	}
 
 	// Serialize to JSON
@@ -154,7 +153,7 @@ func TestSessionSerialization_ToolErrorString(t *testing.T) {
 	}
 
 	// Verify the error was correctly deserialized
-	if loadedResult.Error == nil || loadedResult.Error.Error() != "tool execution failed: permission denied" {
+	if loadedResult.Error == "" || loadedResult.Error != "tool execution failed: permission denied" {
 		t.Errorf("Expected error string 'tool execution failed: permission denied', got '%v'", loadedResult.Error)
 	}
 }
@@ -164,7 +163,7 @@ func TestSessionSerialization_NoToolError(t *testing.T) {
 	toolResult := ToolResult{
 		ToolCallID: "call-123",
 		Result:     "success",
-		Error:      nil,
+		Error:      "",
 	}
 
 	// Serialize to JSON
@@ -180,8 +179,8 @@ func TestSessionSerialization_NoToolError(t *testing.T) {
 	}
 
 	// Verify the tool result was correctly deserialized
-	if loadedResult.Error != nil {
-		t.Errorf("Expected nil error, got '%v'", loadedResult.Error)
+	if loadedResult.Error != "" {
+		t.Errorf("Expected empty error, got '%v'", loadedResult.Error)
 	}
 	if loadedResult.Result != "success" {
 		t.Errorf("Expected result 'success', got '%s'", loadedResult.Result)
@@ -302,12 +301,12 @@ func TestSessionSerialization_WithToolErrors(t *testing.T) {
 			{
 				ToolCallID: "call-1",
 				Result:     "",
-				Error:      errors.New("tool failed: permission denied"),
+				Error:      "tool failed: permission denied",
 			},
 			{
 				ToolCallID: "call-2",
 				Result:     "success",
-				Error:      nil,
+				Error:      "",
 			},
 		},
 	}
@@ -334,11 +333,11 @@ func TestSessionSerialization_WithToolErrors(t *testing.T) {
 	if len(loadedSession.Turns[0].ToolResults) != 2 {
 		t.Errorf("Expected 2 tool results, got %d", len(loadedSession.Turns[0].ToolResults))
 	}
-	if loadedSession.Turns[0].ToolResults[0].Error == nil || loadedSession.Turns[0].ToolResults[0].Error.Error() != "tool failed: permission denied" {
+	if loadedSession.Turns[0].ToolResults[0].Error == "" || loadedSession.Turns[0].ToolResults[0].Error != "tool failed: permission denied" {
 		t.Errorf("Expected error 'tool failed: permission denied', got '%v'", loadedSession.Turns[0].ToolResults[0].Error)
 	}
-	if loadedSession.Turns[0].ToolResults[1].Error != nil {
-		t.Errorf("Expected nil error, got '%v'", loadedSession.Turns[0].ToolResults[1].Error)
+	if loadedSession.Turns[0].ToolResults[1].Error != "" {
+		t.Errorf("Expected empty error, got '%v'", loadedSession.Turns[0].ToolResults[1].Error)
 	}
 }
 
