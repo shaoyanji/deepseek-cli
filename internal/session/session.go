@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"deepseek-cli/internal/engine"
@@ -237,4 +238,84 @@ func DefaultSessionDir() (string, error) {
 func CreateSession(mode execpolicy.ExecutionMode, workspacePath string) (*engine.Session, error) {
 	sessionID := fmt.Sprintf("%d", time.Now().UnixNano())
 	return engine.NewSession(sessionID, workspacePath, mode)
+}
+
+// CreateNamedSession creates a new named session
+func CreateNamedSession(name string, mode execpolicy.ExecutionMode, workspacePath string) (*engine.Session, error) {
+	if name == "" {
+		return nil, fmt.Errorf("session name cannot be empty")
+	}
+	
+	sess, err := engine.NewSession(name, workspacePath, mode)
+	if err != nil {
+		return nil, err
+	}
+	
+	return sess, nil
+}
+
+// GetSessionPath returns the path to a session file
+func (m *Manager) GetSessionPath(name string) string {
+	return filepath.Join(m.sessionDir, fmt.Sprintf("%s.json", name))
+}
+
+// SessionExists checks if a session exists
+func (m *Manager) SessionExists(name string) bool {
+	path := m.GetSessionPath(name)
+	_, err := os.Stat(path)
+	return err == nil
+}
+
+// GetSessionInfo returns metadata about all sessions
+type SessionInfo struct {
+	Name         string    `json:"name"`
+	LastModified time.Time `json:"last_modified"`
+	TurnCount    int       `json:"turn_count"`
+	Model        string    `json:"model"`
+	Mode         string    `json:"mode"`
+}
+
+// ListWithInfo lists all sessions with their metadata
+func (m *Manager) ListWithInfo() ([]SessionInfo, error) {
+	files, err := os.ReadDir(m.sessionDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []SessionInfo{}, nil
+		}
+		return nil, fmt.Errorf("reading session directory: %w", err)
+	}
+
+	var infos []SessionInfo
+	for _, file := range files {
+		if file.IsDir() || filepath.Ext(file.Name()) != ".json" {
+			continue
+		}
+
+		name := strings.TrimSuffix(file.Name(), ".json")
+		info := SessionInfo{
+			Name: name,
+		}
+
+		// Get file modification time
+		fileInfo, err := file.Info()
+		if err == nil {
+			info.LastModified = fileInfo.ModTime()
+		}
+
+		// Try to load session for additional info
+		filename := filepath.Join(m.sessionDir, file.Name())
+		data, err := os.ReadFile(filename)
+		if err == nil {
+			sess, err := engine.LoadSession(data)
+			if err == nil {
+				info.TurnCount = len(sess.Turns)
+				info.Model = sess.Model
+				info.Mode = string(sess.Mode)
+			}
+		}
+
+		infos = append(infos, info)
+	}
+
+	return infos, nil
 }
