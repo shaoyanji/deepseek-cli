@@ -234,6 +234,158 @@ func TestBuildMessages_NoDuplicateUserInput(t *testing.T) {
 	}
 }
 
+func TestBuildMessages_WithFailedToolResults(t *testing.T) {
+	session, err := NewSession("test-session", "/tmp/test", execpolicy.ModeAgent)
+	if err != nil {
+		t.Fatalf("Failed to create session: %v", err)
+	}
+
+	// Add a previous turn with tool calls and mixed results (some failed, some succeeded)
+	previousTurn := &Turn{
+		ID:        1,
+		UserInput: "do something",
+		ToolCalls: []ToolCall{
+			{ID: "call-1", Name: "edit", Arguments: map[string]interface{}{"path": "file.txt"}},
+			{ID: "call-2", Name: "view", Arguments: map[string]interface{}{"path": "file.txt"}},
+		},
+		Timestamp: session.CreatedAt,
+		Status:    TurnComplete,
+		ToolResults: []ToolResult{
+			{ToolCallID: "call-1", Result: "", Error: "permission denied"},
+			{ToolCallID: "call-2", Result: "file contents", Error: ""},
+		},
+	}
+	session.Turns = append(session.Turns, previousTurn)
+
+	engine := NewEngine(session, &MockToolExecutor{}, &MockLLMClient{})
+
+	messages := engine.buildMessages("new input")
+
+	// Verify tool calls are grouped into a single assistant message
+	foundToolCallMsg := false
+	foundFailedResult := false
+	foundSuccessResult := false
+
+	for _, msg := range messages {
+		if msg.Role == "assistant" && len(msg.ToolCalls) > 0 {
+			foundToolCallMsg = true
+			// All tool calls should be in one assistant message
+			if len(msg.ToolCalls) != 2 {
+				t.Errorf("Expected 2 tool calls in single assistant message, got %d", len(msg.ToolCalls))
+			}
+			// Content should be empty for tool call messages
+			if msg.Content != "" {
+				t.Errorf("Expected empty content for tool call message, got '%s'", msg.Content)
+			}
+		}
+		if msg.Role == "tool" && msg.Content == "Error: permission denied" {
+			foundFailedResult = true
+			if msg.ToolCallID != "call-1" {
+				t.Errorf("Expected ToolCallID 'call-1' for failed result, got '%s'", msg.ToolCallID)
+			}
+		}
+		if msg.Role == "tool" && msg.Content == "file contents" {
+			foundSuccessResult = true
+			if msg.ToolCallID != "call-2" {
+				t.Errorf("Expected ToolCallID 'call-2' for success result, got '%s'", msg.ToolCallID)
+			}
+		}
+	}
+
+	if !foundToolCallMsg {
+		t.Error("Expected tool calls to add an assistant message with ToolCalls field")
+	}
+	if !foundFailedResult {
+		t.Error("Expected failed tool result to be included with 'Error:' prefix")
+	}
+	if !foundSuccessResult {
+		t.Error("Expected successful tool result to be included")
+	}
+}
+
+func TestRunTurn_NoDuplicateUserInput(t *testing.T) {
+	session, err := NewSession("test-session", "/tmp/test", execpolicy.ModeAgent)
+	if err != nil {
+		t.Fatalf("Failed to create session: %v", err)
+	}
+
+	// Mock LLM returns a simple response (no tool calls) with nil usage
+	mockLLM := &MockLLMClient{
+		Response: &LLMResponse{
+			Content:   "Test response",
+			ToolCalls: []ToolCall{},
+			Usage:     nil,
+		},
+	}
+
+	engine := NewEngine(session, &MockToolExecutor{}, mockLLM)
+
+	// Capture messages from buildMessages by spying on it
+	// We can't directly spy, but we can verify the session turn count is correct
+	// and run a second turn to ensure there's no duplication
+
+	// Run first turn
+	_, err = engine.RunTurn(context.Background(), "first input")
+	if err != nil {
+		t.Fatalf("First RunTurn failed: %v", err)
+	}
+
+	// Run second turn
+	mockLLM.Response = &LLMResponse{
+		Content:   "Second response",
+		ToolCalls: []ToolCall{},
+		Usage:     nil,
+	}
+	_, err = engine.RunTurn(context.Background(), "second input")
+	if err != nil {
+		t.Fatalf("Second RunTurn failed: %v", err)
+	}
+
+	// Verify both turns were stored
+	if len(session.Turns) != 2 {
+		t.Errorf("Expected 2 turns in session, got %d", len(session.Turns))
+	}
+
+	// Verify turn contents (no duplication of user input)
+	if session.Turns[0].UserInput != "first input" {
+		t.Errorf("Expected turn 0 UserInput 'first input', got '%s'", session.Turns[0].UserInput)
+	}
+	if session.Turns[1].UserInput != "second input" {
+		t.Errorf("Expected turn 1 UserInput 'second input', got '%s'", session.Turns[1].UserInput)
+	}
+}
+
+func TestLoadSession_UnknownMode(t *testing.T) {
+	// Serialize a session with an unknown mode
+	session := &Session{
+		ID:   "bad-session",
+		Mode: "unknown_mode",
+	}
+
+	data, err := json.Marshal(session)
+	if err != nil {
+		t.Fatalf("Failed to marshal session: %v", err)
+	}
+
+	// Try to load it - should fail with unknown mode error
+	_, err = LoadSession(data)
+	if err == nil {
+		t.Error("Expected error for unknown mode, got nil")
+	}
+
+	// Also test empty mode
+	session.Mode = ""
+	data, err = json.Marshal(session)
+	if err != nil {
+		t.Fatalf("Failed to marshal session: %v", err)
+	}
+
+	_, err = LoadSession(data)
+	if err == nil {
+		t.Error("Expected error for empty mode, got nil")
+	}
+}
+
 func TestSessionSerialization_PolicySkipped(t *testing.T) {
 	session, err := NewSession("test-session", "/tmp/test", execpolicy.ModeYOLO)
 	if err != nil {

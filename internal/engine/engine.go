@@ -84,8 +84,10 @@ type LLMClient interface {
 
 // Message represents a chat message
 type Message struct {
-	Role    string
-	Content string
+	Role       string
+	Content    string
+	ToolCalls  []ToolCall `json:"tool_calls,omitempty"`
+	ToolCallID string    `json:"tool_call_id,omitempty"`
 }
 
 // ToolDefinition defines a tool's schema
@@ -148,7 +150,7 @@ func (e *Engine) GetSession() *Session {
 func (e *Engine) RunTurn(ctx context.Context, userInput string) (*Turn, error) {
 	e.mu.Lock()
 	
-	// Create new turn
+	// Create new turn (not appended to session yet to avoid duplicate user input in buildMessages)
 	turn := &Turn{
 		ID:        len(e.session.Turns) + 1,
 		UserInput: userInput,
@@ -156,7 +158,6 @@ func (e *Engine) RunTurn(ctx context.Context, userInput string) (*Turn, error) {
 		Status:    TurnPending,
 	}
 	
-	e.session.Turns = append(e.session.Turns, turn)
 	e.session.CurrentTurn = turn.ID
 	e.session.UpdatedAt = time.Now()
 	
@@ -167,8 +168,13 @@ func (e *Engine) RunTurn(ctx context.Context, userInput string) (*Turn, error) {
 		e.callbacks.OnTurnStart(turn)
 	}
 	
-	// Execute the turn
+	// Execute the turn (turn is not yet in session so buildMessages only sees previous turns)
 	err := e.executeTurn(ctx, turn)
+	
+	// Append turn to session after execution
+	e.mu.Lock()
+	e.session.Turns = append(e.session.Turns, turn)
+	e.mu.Unlock()
 	
 	// Notify turn end
 	if e.callbacks.OnTurnEnd != nil {
@@ -241,18 +247,34 @@ func (e *Engine) buildMessages(userInput string) []Message {
 		if turn.ModelResponse != "" {
 			messages = append(messages, Message{Role: "assistant", Content: turn.ModelResponse})
 		}
-		// Add tool results
+		// Add tool call assistant message (group all tool calls in a single message)
+		if len(turn.ToolCalls) > 0 {
+			messages = append(messages, Message{
+				Role:      "assistant",
+				Content:   "",
+				ToolCalls: turn.ToolCalls,
+			})
+		}
+		
+		// Add tool results (including failed ones so the model can self-correct)
 		for _, result := range turn.ToolResults {
-			if result.Error == "" {
+			if result.Error != "" {
 				messages = append(messages, Message{
-					Role:    "tool",
-					Content: result.Result,
+					Role:       "tool",
+					Content:    fmt.Sprintf("Error: %s", result.Error),
+					ToolCallID: result.ToolCallID,
+				})
+			} else {
+				messages = append(messages, Message{
+					Role:       "tool",
+					Content:    result.Result,
+					ToolCallID: result.ToolCallID,
 				})
 			}
 		}
 	}
 	
-	// Add current user input
+	// Add current user input at the end (turn is not in session.Turns yet, so no duplication)
 	messages = append(messages, Message{Role: "user", Content: userInput})
 	
 	return messages
@@ -440,7 +462,7 @@ func (e *Engine) executeToolCalls(ctx context.Context, turn *Turn) error {
 		if !approval.Approved {
 			turn.ToolResults = append(turn.ToolResults, ToolResult{
 				ToolCallID: call.ID,
-				Error:      fmt.Errorf("tool execution denied: %s", approval.Reason).Error(),
+				Error:      "tool execution denied: " + approval.Reason,
 			})
 			continue
 		}
@@ -502,6 +524,14 @@ func LoadSession(data []byte) (*Session, error) {
 	var session Session
 	if err := json.Unmarshal(data, &session); err != nil {
 		return nil, err
+	}
+	
+	// Validate mode is known before creating policy
+	switch session.Mode {
+	case execpolicy.ModeAcme, execpolicy.ModeAgent, execpolicy.ModeYOLO:
+		// valid
+	default:
+		return nil, fmt.Errorf("unknown execution mode: %q", session.Mode)
 	}
 	
 	// Initialize policy based on mode
