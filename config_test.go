@@ -16,7 +16,8 @@ func TestGetDefaultChatConfig(t *testing.T) {
 	assert.Equal(t, 1.0, config.TopP)
 	assert.Equal(t, "enabled", config.Thinking)
 	assert.Equal(t, "high", config.ReasoningEffort)
-	assert.False(t, config.Stream)
+	assert.True(t, config.Stream) // Streaming is now default (Feature 2)
+	assert.True(t, config.IncludeUsage) // Usage stats enabled by default
 }
 
 func TestGetDefaultFIMConfig(t *testing.T) {

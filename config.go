@@ -20,6 +20,14 @@ type Config struct {
 
 	// FIM defaults
 	FIM FIMConfig `yaml:"fim,omitempty"`
+
+	// Security settings
+	Security SecurityConfig `yaml:"security,omitempty"`
+}
+
+// SecurityConfig represents security-related settings
+type SecurityConfig struct {
+	ScanOutput bool `yaml:"scan_output,omitempty"`
 }
 
 // ChatConfig represents chat completion defaults
@@ -64,8 +72,8 @@ func GetDefaultChatConfig() ChatConfig {
 		PresencePenalty:  0.0,
 		Thinking:         "enabled",
 		ReasoningEffort:  "high",
-		Stream:           false,
-		IncludeUsage:     false,
+		Stream:           true, // Changed to true - streaming is now default
+		IncludeUsage:     true, // Enable usage by default for stats
 		JSONMode:         false,
 		Beta:             false,
 	}
@@ -201,10 +209,14 @@ chat:
   presence_penalty: 0.0  # Presence penalty (-2.0 to 2.0)
   thinking: "enabled"  # Thinking mode: enabled or disabled
   reasoning_effort: "high"  # Reasoning effort: high or max
-  stream: false  # Enable streaming by default
-  include_usage: false  # Include usage info in streaming
+  stream: true  # Enable streaming by default (use --no-stream to disable)
+  include_usage: true  # Include usage info in streaming for cost stats
   json_mode: false  # Enable JSON mode by default
   beta: false  # Use beta endpoint by default
+
+# Security settings
+security:
+  scan_output: true  # Scan AI output for dangerous commands
 
 # FIM completion defaults
 fim:

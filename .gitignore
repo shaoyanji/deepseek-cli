@@ -1,42 +1,56 @@
 ```
-# Go-specific ignores
+# Compiled and build artifacts
 *.o
-*.a
-*.so
-*.dylib
-*.dll
-*.exe
+*.obj
+*.out
 
 # Dependencies
 vendor/
 
-# Build artifacts
-bin/
-dist/
-build/
-target/
-
-# Test coverage
-.coverage
-coverage/
-htmlcov/
+# Logs and temp files
+*.log
+*.tmp
 
 # Environment
 .env
 .env.local
-.env.*
+*.env.*
 
-# Editors
+# Coverage
+.coverage
+coverage/
+htmlcov/
+
+# Build directories
+dist/
+build/
+target/
+bin/
+
+# Package management
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Testing
+*.test
+*.exe
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# IDE
 .vscode/
 .idea/
 *.swp
 *.swo
-*.tmp
 
-# Logs
-*.log
-
-# OS
-.DS_Store
-Thumbs.db
+# Go specific
+*.a
+*.so
+*.dylib
+go.mod
+go.sum
 ```
